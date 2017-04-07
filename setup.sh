@@ -18,14 +18,12 @@ function checkout_remote() {
 }
 
 if [[ -z "$WEST_PYTHON" ]] ;  then
-    WEST_PYTHON=python2.7
+    WEST_PYTHON=$(which python2.7)
 fi
 
 find . -name \*.so -print0 | xargs -0 rm &> /dev/null
 
 checkout_remote blessings  git://github.com/erikrose/blessings.git d3ba51c5870d599b40b387ac6703805c3e23d292 || exit 1
-checkout_remote west_tools git://github.com/westpa/west_tools.git  15ac2534bb94c7386938192bd6d70dbf8401bf24 || exit 1
-checkout_remote wwmgr      git://github.com/westpa/wwmgr.git       06199824dbadd5e6ea184ac1f849339dff05e652 || exit 1
 
 if [[ -d lib/h5py ]] ; then
     echo "using custom h5py located in $PWD/lib/h5py"
@@ -50,3 +48,11 @@ for d in lib/west_tools; do
     cd -
 done
 
+WEST_PYTHON=$WEST_PYTHON $WEST_PYTHON .westpa_gen.py
+chmod +x westpa.sh
+
+echo ""
+echo "Installation successful!"
+echo "Your WEST_ROOT is set as $PWD."
+echo "In order to use westpa, please source $PWD/westpa.sh before running!"
+echo ""

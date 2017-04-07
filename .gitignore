@@ -1,6 +1,12 @@
 .DS_Store
 lib/blessings/
-lib/west_tools/
-lib/wwmgr/
 *.pyc
 *.pyo
+*.swp
+.project
+.pydevproject
+*~
+*.swp
+*.swo
+*.so
+build/
