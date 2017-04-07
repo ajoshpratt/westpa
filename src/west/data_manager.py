@@ -198,6 +198,8 @@ class WESTDataManager:
     default_we_h5filename      = 'west.h5'
     default_we_h5file_driver   = None
     default_flush_period = 60
+    default_data_refs          = '$WEST_SIM_ROOT/traj_segs/{segment.n_iter:06d}/'
+    #default_store_aux_in_sym   = False
     
     # Compress any auxiliary dataset whose total size (across all segments) is more than 1MB
     default_aux_compression_threshold = 1048576
@@ -229,6 +231,12 @@ class WESTDataManager:
         self.aux_compression_threshold = config.get(['west','data','aux_compression_threshold'],
                                                     self.default_aux_compression_threshold)
         self.flush_period = config.get(['west','data','flush_period'], self.default_flush_period)
+
+        # For storing trajectory coordinates as axudata...
+        # We'll probably want to fancy this up later, but for now, it should work.
+
+        self.data_refs = config.get_path(['west', 'data', 'data_refs', 'iteration'], default=None)
+        #self.store_aux_in_sym = config.get_path(['west', 'data', 'aux_data_file'], self.default_store_aux_in_sym)
         
         # Process dataset options
         dsopts_list = config.get(['west','data','datasets']) or []
@@ -377,6 +385,32 @@ class WESTDataManager:
                 self.we_h5file.flush()
                 self.last_flush = time.time()
 
+    def create_new_auxdata_file(self, h5filename): #istates):
+        '''Create new HDF5 file that can be used to symlink in auxdata.'''
+        # This is mostly just here for convenience, right now.  I think it's the right place to put it in there.
+        # We'll return it and use it in the data manager and set it as an option to store auxfiles.
+        aux_h5file = h5py.File(h5filename, 'w', driver=self.we_h5file_driver, flags="NPY_ARRAY_FORCECAST")
+        
+        #def flushing_lock(self):
+        #    return flushing_lock(self.lock, self.we_h5file)
+        #self.lock = threading.RLock()
+        with flushing_lock(threading.RLock(), aux_h5file):
+            aux_h5file['/'].attrs['west_file_format_version'] = file_format_version
+            aux_h5file['/'].attrs['west_iter_prec'] = self.iter_prec
+            aux_h5file['/'].attrs['iteration'] = self.current_iteration + 1
+            #aux_h5file['/'].create_dataset('summary',
+            #                                   shape=(1,), 
+            #                                   dtype=summary_table_dtype,
+            #                                   maxshape=(None,))
+            #self.we_h5file.create_group('/iterations')
+        return aux_h5file
+
+    def create_symlink(self, aux_h5file, h5file=None, symlink_name='auxdata', local_point='/'):
+        if h5file == None:
+            h5file = self.we_h5file
+        with self.flushing_lock():
+            h5file[symlink_name] = h5py.ExternalLink(aux_h5file, local_point)
+
     def save_target_states(self, tstates, n_iter=None):
         '''Save the given target states in the HDF5 file; they will be used for the next iteration to
         be propagated.  A complete set is required, even if nominally appending to an existing set,
@@ -504,13 +538,22 @@ class WESTDataManager:
                 system = westpa.rc.get_system_driver()            
                 state_table = numpy.empty((len(basis_states),), dtype=bstate_dtype)
                 state_pcoords = numpy.empty((len(basis_states),system.pcoord_ndim), dtype=system.pcoord_dtype)
+                extra = []
+                coords = []
                 for i, state in enumerate(basis_states):
                     state.state_id = i
                     state_table[i]['label'] = state.label
                     state_table[i]['probability'] = state.probability
                     state_table[i]['auxref'] = state.auxref or ''
                     state_pcoords[i] = state.pcoord
+                    try:
+                        extra.append(state.data['extra'])
+                        coords.append(state.data['coords'])
+                    except:
+                        pass
                 
+                state_group['bstate_extra'] = extra
+                state_group['bstate_coords'] = coords
                 state_group['bstate_index'] = state_table
                 state_group['bstate_pcoord'] = state_pcoords
             
@@ -586,6 +629,10 @@ class WESTDataManager:
             state_ids = [state.state_id for state in initial_states]
             index_entries = ibstate_group['istate_index'][state_ids] 
             pcoord_vals = numpy.empty((len(initial_states), system.pcoord_ndim), dtype=system.pcoord_dtype)
+            #extra = numpy.empty((len(initial_states), 2), dtype=numpy.void)
+            #coords = numpy.empty((len(initial_states), 2), dtype=numpy.void)
+            extra = []
+            coords = []
             for i, initial_state in enumerate(initial_states):
                 index_entries[i]['iter_created'] = initial_state.iter_created
                 index_entries[i]['iter_used'] = initial_state.iter_used or InitialState.ISTATE_UNUSED
@@ -593,6 +640,27 @@ class WESTDataManager:
                 index_entries[i]['istate_type'] = initial_state.istate_type or InitialState.ISTATE_TYPE_UNSET
                 index_entries[i]['istate_status'] = initial_state.istate_status or InitialState.ISTATE_STATUS_PENDING
                 pcoord_vals[i] = initial_state.pcoord
+                try:
+                    extra.append(state.data['extra'])
+                    coords.append(state.data['coords'])
+                except:
+                    pass
+            
+            try:
+                ibstate_group['istate_extra'] = extra
+                ibstate_group['istate_coords'] = coords
+            except:
+                # just grow it.
+                extra = list(ibstate_group['istate_extra']) + extra
+                coords = list(ibstate_group['istate_coords']) + coords
+                del(ibstate_group['istate_extra'])
+                del(ibstate_group['istate_coords'])
+                ibstate_group['istate_extra'] = extra
+                ibstate_group['istate_coords'] = coords
+                pass
+            #istate_coords = ibstate_group.create_dataset('istate_pcoord', dtype=system.pcoord_dtype,
+            #                                                  shape=(n_states,system.pcoord_ndim),
+            #                                                  maxshape=(None,system.pcoord_ndim))
             
             ibstate_group['istate_index'][state_ids] = index_entries
             ibstate_group['istate_pcoord'][state_ids] = pcoord_vals
@@ -728,6 +796,14 @@ class WESTDataManager:
             shape = (n_particles, pcoord_len, pcoord_ndim)
             pcoord_ds = create_dataset_from_dsopts(iter_group, pcoord_opts, shape, pcoord_dtype)
             pcoord = numpy.empty((n_particles, pcoord_len, pcoord_ndim), pcoord_dtype)
+
+            # While it seems weird, maybe, we want to create a separate auxdata file if necessary.
+            # This is as good a place as any to do it.  We'll create the file and make the symlink.
+            # we'll want to pull from the options to see if we'll be doing this, but normally, yes.
+            # self.data_refs = config.get_path(['west', 'data', 'data_refs', 'iteration'], default=None)
+            if self.data_refs != None:
+                self.aux_h5file = self.create_new_auxdata_file(self.data_refs.format(n_iter=n_iter))
+                self.create_symlink(self.data_refs.format(n_iter=n_iter), iter_group, 'auxdata')
                                     
             
             total_parents = 0
