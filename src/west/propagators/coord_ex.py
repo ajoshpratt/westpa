@@ -379,6 +379,7 @@ class ExecutablePropagator(WESTPropagator):
         self.update_args_env_segment(template_args, environ, segment)        
         environ.update(addtl_env or {})
         self.prepare_file_system(child_info, segment, environ)
+        child_info['cwd'] = environ['WEST_CURRENT_SEG_DATA_REF']
         return self.exec_child_from_child_info(child_info, template_args, environ)
 
     def prepare_file_system(self, child_info, segment, environ):
