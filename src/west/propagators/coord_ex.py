@@ -113,6 +113,8 @@ class ExecutablePropagator(WESTPropagator):
     
     # Set everywhere a progress coordinate is required
     ENV_PCOORD_RETURN        = 'WEST_PCOORD_RETURN'
+    ENV_TRAJECTORY_RETURN    = 'WEST_TRAJECTORY_RETURN'
+    ENV_RESTART_RETURN       = 'WEST_RESTART_RETURN'
     
     ENV_RAND16               = 'WEST_RAND16'
     ENV_RAND32               = 'WEST_RAND32'
@@ -442,10 +444,10 @@ class ExecutablePropagator(WESTPropagator):
         efd, erfname = tempfile.mkstemp()
         os.close(efd)
         
-        addtl_env = {self.ENV_PCOORD_RETURN: prfname,
-                     'WEST_RESTART_RETURN':  erfname,
-                     'WEST_TRAJECTORY_RETURN': crfname,
-                     self.ENV_STRUCT_DATA_REF: struct_ref}
+        addtl_env = {self.ENV_PCOORD_RETURN:     prfname,
+                     self.ENV_RESTART_RETURN:    erfname,
+                     self.ENV_TRAJECTORY_RETURN: crfname,
+                     self.ENV_STRUCT_DATA_REF:   struct_ref}
 
         try:
             #rc, rusage = execfn(child_info, state, addtl_env)
@@ -546,9 +548,6 @@ class ExecutablePropagator(WESTPropagator):
             # Spawn propagator and wait for its completion
             #used_environ, rc, rusage = self.exec_for_segment(child_info, segment, addtl_env) 
             results = self.exec_for_segment(child_info, segment, addtl_env) 
-            #def cleanup_file_system(self, child_info, segment, environ):
-            #    import h5py, os, shutil
-            #    shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
             rc, rusage = results[1]
             run_environ = results[0]
             self.cleanup_file_system(child_info, segment, run_environ)
