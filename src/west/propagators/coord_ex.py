@@ -78,11 +78,11 @@ def coords_output(fieldname, coord_file, segment, single_point):
     with open (coord_file, mode='wb') as file:
         file.write(segment.data[fieldname])
 
-def extra_parent_output(fieldname, coord_file, segment, single_point, restart):
+def extra_parent_output(tarball, restart):
     # We'll assume it's... for the moment, who cares, just pickle it.
     # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
-    with open (coord_file, mode='wb') as file:
+    with open (tarball, mode='wb') as file:
         file.write(restart)
 
 def aux_data_loader(fieldname, data_filename, segment, single_point):
@@ -391,17 +391,9 @@ class ExecutablePropagator(WESTPropagator):
             import shutil
             shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
             os.makedirs(environ['WEST_CURRENT_SEG_DATA_REF'])
-        if segment.parent_id >= 0:
-            #print(segment.parent)
-            #we_h5file = h5py.File(self.we_h5file, 'r')
-            if segment.parent != None:
-                extra_parent_output('auxdata/extra', '{}/parent.tar'.format(environ['WEST_CURRENT_SEG_DATA_REF']), segment, single_point=False, restart=segment.parent)
-            #we_h5file.close()
-        else:
-            we_h5file = h5py.File(self.we_h5file, 'r')
-            #if segment.parent != None:
-                extra_parent_output('ibstates/0/istate_extra', '{}/parent.tar'.format(environ['WEST_CURRENT_SEG_DATA_REF']), segment, single_point=False, restart=segment.parent)
-            we_h5file.close()
+        #if segment.parent_id >= 0:
+        #print(segment.parent)
+        extra_parent_output(tarball='{}/parent.tar'.format(environ['WEST_CURRENT_SEG_DATA_REF']), restart=segment.parent)
 
     def cleanup_file_system(self, child_info, segment, environ):
         import h5py, os, shutil

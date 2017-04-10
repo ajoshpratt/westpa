@@ -834,11 +834,12 @@ class WESTDataManager:
                         pcoord[seg_id,...] = segment.pcoord
                 #try:
                 # THIS IS THE LINE.  We need to pass the information HERE.
-                if n_iter > 1:
+                if segment.parent_id >= 0:
                     parent_group = self.get_iter_group(n_iter-1)
                     segment.parent = parent_group['auxdata']['extra'][segment.parent_id]
-                #except:
-                #    pass
+                else:
+                    ibstate = self.find_ibstate_group(n_iter)
+                    segment.parent = ibstate['istate_extra'][(segment.parent_id*-1)-1]
                     
                         
             if total_parents > 0:
@@ -1059,10 +1060,12 @@ class WESTDataManager:
                     wtg_offset = row['wtg_offset']  
                     wtg_parent_ids = all_parent_ids[wtg_offset:wtg_offset+wtg_n_parents]
                     segment.parent_id = long(row['parent_id'])
-                try:
+                if segment.parent_id >= 0:
+                    parent_group = self.get_iter_group(n_iter-1)
                     segment.parent = parent_group['auxdata']['extra'][segment.parent_id]
-                except:
-                    pass
+                else:
+                    ibstate = self.find_ibstate_group(n_iter)
+                    segment.parent = ibstate['istate_extra'][(segment.parent_id*-1)-1]
                 segment.wtg_parent_ids = set(imap(long,wtg_parent_ids))
                 assert len(segment.wtg_parent_ids) == wtg_n_parents
                 segments.append(segment)
