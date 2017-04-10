@@ -78,12 +78,12 @@ def coords_output(fieldname, coord_file, segment, single_point):
     with open (coord_file, mode='wb') as file:
         file.write(segment.data[fieldname])
 
-def extra_parent_output(fieldname, coord_file, segment, single_point, parent_iter):
+def extra_parent_output(fieldname, coord_file, segment, single_point, restart):
     # We'll assume it's... for the moment, who cares, just pickle it.
     # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
     with open (coord_file, mode='wb') as file:
-        file.write(parent_iter[fieldname][segment.parent_id])
+        file.write(restart)
 
 def aux_data_loader(fieldname, data_filename, segment, single_point):
     data = numpy.loadtxt(data_filename)
@@ -158,6 +158,7 @@ class ExecutablePropagator(WESTPropagator):
         self.segment_ref_template       = config['west','data','data_refs','segment']
         self.basis_state_ref_template   = config['west','data','data_refs','basis_state']
         self.initial_state_ref_template = config['west','data','data_refs','initial_state']
+        self.trajectory_types           = config['west','data','data_refs','trajectory_type'] 
         
         # Load additional environment variables for all child processes
         self.addtl_child_environ.update({k:str(v) for k,v in (config['west','executable','environ'] or {}).iteritems()})
@@ -391,12 +392,15 @@ class ExecutablePropagator(WESTPropagator):
             shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
             os.makedirs(environ['WEST_CURRENT_SEG_DATA_REF'])
         if segment.parent_id >= 0:
-            we_h5file = h5py.File(self.we_h5file, 'r')
-            extra_parent_output('auxdata/extra', '{}/parent.tar'.format(environ['WEST_CURRENT_SEG_DATA_REF']), segment, single_point=False, parent_iter=we_h5file['/iterations/iter_{:0{prec}d}'.format(long(segment.n_iter-1), prec=8)])
-            we_h5file.close()
+            #print(segment.parent)
+            #we_h5file = h5py.File(self.we_h5file, 'r')
+            if segment.parent != None:
+                extra_parent_output('auxdata/extra', '{}/parent.tar'.format(environ['WEST_CURRENT_SEG_DATA_REF']), segment, single_point=False, restart=segment.parent)
+            #we_h5file.close()
         else:
             we_h5file = h5py.File(self.we_h5file, 'r')
-            extra_parent_output('ibstates/0/istate_extra', '{}/parent.tar'.format(environ['WEST_CURRENT_SEG_DATA_REF']), segment, single_point=False, parent_iter=we_h5file['/'])
+            #if segment.parent != None:
+                extra_parent_output('ibstates/0/istate_extra', '{}/parent.tar'.format(environ['WEST_CURRENT_SEG_DATA_REF']), segment, single_point=False, restart=segment.parent)
             we_h5file.close()
 
     def cleanup_file_system(self, child_info, segment, environ):
@@ -464,13 +468,12 @@ class ExecutablePropagator(WESTPropagator):
             if rc != 0:
                 log.error('get_pcoord executable {!r} returned {}'.format(child_info['executable'], rc))
                 
-            ploader = self.data_info['pcoord']['loader']
-            ploader('pcoord', prfname, state, single_point = True)
             cloader = self.data_info['coords']['loader']
             cloader('coords', crfname, state, single_point = True)
             eloader = self.data_info['extra']['loader']
             eloader('extra', erfname, state, single_point = True)
-            print(state)
+            ploader = self.data_info['pcoord']['loader']
+            ploader('pcoord', prfname, state, single_point = True)
         finally:
             try:
                 os.unlink(prfname)
@@ -583,6 +586,7 @@ class ExecutablePropagator(WESTPropagator):
                 
                 filename = return_files[dataset]
                 loader = self.data_info[dataset]['loader']
+                segment.file_type = self.trajectory_types
                 try:
                     loader(dataset, filename, segment, single_point=False)
                 except Exception as e:

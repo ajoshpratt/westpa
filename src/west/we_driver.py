@@ -358,6 +358,8 @@ class WEDriver:
                 
                 
                 segment.parent_id = -(initial_state.state_id+1)
+                if 'extra' in initial_state.data:
+                    segment.parent = initial_state.data['extra'],
                 segment.pcoord[0] = initial_state.pcoord
 
                 self.new_weights.append(NewWeightEntry(source_type=NewWeightEntry.NW_SOURCE_RECYCLED,
@@ -400,6 +402,8 @@ class WEDriver:
                                   wtg_parent_ids = set(segment.wtg_parent_ids),
                                   pcoord = segment.pcoord.copy(),
                                   status = Segment.SEG_STATUS_PREPARED)
+            if 'extra' in segment.data:
+                new_segment.parent = segment.data['extra'],
             new_segment.pcoord[0,:] = segment.pcoord[0,:]
             new_segments.append(new_segment)
             
@@ -435,6 +439,8 @@ class WEDriver:
         # parent). 
         glom.parent_id = gparent_seg.parent_id
         glom.pcoord[0,:] = gparent_seg.pcoord[0,:]
+        if 'extra' in gparent_seg.data:
+            glom.parent = gparent_seg.data['extra'],
         
         # Weight comes from all segments being merged, and therefore all their
         # parent segments
@@ -662,6 +668,8 @@ class WEDriver:
                                       wtg_parent_ids=set(segment.wtg_parent_ids or []),
                                       pcoord=new_pcoord_array(),
                                       status=Segment.SEG_STATUS_PREPARED)
+                if 'extra' in segment.data:
+                    new_segment.parent = segment.data['extra'],
                 new_segment.pcoord[0] = segment.pcoord[0]
                 self.next_iter_binning[ibin].add(new_segment)
                 
@@ -701,6 +709,8 @@ class WEDriver:
                                       wtg_parent_ids=[segment.seg_id],
                                       pcoord=new_pcoord_array(),
                                       status=Segment.SEG_STATUS_PREPARED)
+                if 'extra' in segment.data:
+                    new_segment.parent = segment.data['extra'],
                 new_segment.pcoord[0] = segment.pcoord[-1]
                 self.next_iter_binning[ibin].add(new_segment)
                 

@@ -235,7 +235,7 @@ class WESTDataManager:
         # For storing trajectory coordinates as axudata...
         # We'll probably want to fancy this up later, but for now, it should work.
 
-        self.data_refs = config.get_path(['west', 'data', 'data_refs', 'iteration'], default=None)
+        self.data_refs = config.get_path(['west', 'data', 'data_refs', 'iteration'], default=self.default_data_refs)
         #self.store_aux_in_sym = config.get_path(['west', 'data', 'aux_data_file'], self.default_store_aux_in_sym)
         
         # Process dataset options
@@ -832,6 +832,13 @@ class WESTDataManager:
                                          % (segment.pcoord.shape, pcoord.shape[1:]))
                     else:
                         pcoord[seg_id,...] = segment.pcoord
+                #try:
+                # THIS IS THE LINE.  We need to pass the information HERE.
+                if n_iter > 1:
+                    parent_group = self.get_iter_group(n_iter-1)
+                    segment.parent = parent_group['auxdata']['extra'][segment.parent_id]
+                #except:
+                #    pass
                     
                         
             if total_parents > 0:
@@ -1008,6 +1015,8 @@ class WESTDataManager:
         
         with self.lock:            
             iter_group = self.get_iter_group(n_iter)
+            if n_iter > 1:
+                parent_group = self.get_iter_group(n_iter-1)
             seg_index_ds = iter_group['seg_index']
             
             if file_version < 5:
@@ -1050,6 +1059,10 @@ class WESTDataManager:
                     wtg_offset = row['wtg_offset']  
                     wtg_parent_ids = all_parent_ids[wtg_offset:wtg_offset+wtg_n_parents]
                     segment.parent_id = long(row['parent_id'])
+                try:
+                    segment.parent = parent_group['auxdata']['extra'][segment.parent_id]
+                except:
+                    pass
                 segment.wtg_parent_ids = set(imap(long,wtg_parent_ids))
                 assert len(segment.wtg_parent_ids) == wtg_n_parents
                 segments.append(segment)
