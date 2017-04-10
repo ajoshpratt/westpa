@@ -135,10 +135,6 @@ class ExecutablePropagator(WESTPropagator):
         self.exe_info['post_iteration'] = {}
         self.exe_info['get_pcoord'] = {}
         self.exe_info['gen_istate'] = {}
-        # Let's try this...
-        # Ultimately, we probably don't want this (and would rather pass a data manager through)
-        self.data_manager = WESTDataManager()
-        self.we_h5file = self.data_manager.we_h5filename
         
         # A mapping of data set name ('pcoord', 'coord', 'com', etc) to a dictionary of
         # attributes like 'loader', 'dtype', etc
@@ -197,14 +193,14 @@ class ExecutablePropagator(WESTPropagator):
                                     'loader': pcoord_loader,
                                     'enabled': True,
                                     'filename': None}
-        self.data_info['coords'] = {'name': 'coords',
+        self.data_info['trajectory'] = {'name': 'trajectory',
                                     'loader': coords_input,
                                     'enabled': True,
                                     'filename': None}
         # This is for stuff like restart files, etc.  That is, the things we'll need to continue the simulation.
         # For now, tar it, pickle it, and call it a day.
         # Then we untar, unpickle, and go from there.
-        self.data_info['extra'] =  {'name': 'extra',
+        self.data_info['restart'] =  {'name': 'restart',
                                     'loader': coords_input,
                                     'enabled': True,
                                     'filename': None}
@@ -391,9 +387,7 @@ class ExecutablePropagator(WESTPropagator):
             import shutil
             shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
             os.makedirs(environ['WEST_CURRENT_SEG_DATA_REF'])
-        #if segment.parent_id >= 0:
-        #print(segment.parent)
-        extra_parent_output(tarball='{}/parent.tar'.format(environ['WEST_CURRENT_SEG_DATA_REF']), restart=segment.parent)
+        extra_parent_output(tarball='{}/parent.tar'.format(environ['WEST_CURRENT_SEG_DATA_REF']), restart=segment.restart)
 
     def cleanup_file_system(self, child_info, segment, environ):
         import h5py, os, shutil
@@ -449,8 +443,8 @@ class ExecutablePropagator(WESTPropagator):
         os.close(efd)
         
         addtl_env = {self.ENV_PCOORD_RETURN: prfname,
-                     'WEST_EXTRA_RETURN':  erfname,
-                     'WEST_COORDS_RETURN': crfname,
+                     'WEST_RESTART_RETURN':  erfname,
+                     'WEST_TRAJECTORY_RETURN': crfname,
                      self.ENV_STRUCT_DATA_REF: struct_ref}
 
         try:
@@ -460,10 +454,10 @@ class ExecutablePropagator(WESTPropagator):
             if rc != 0:
                 log.error('get_pcoord executable {!r} returned {}'.format(child_info['executable'], rc))
                 
-            cloader = self.data_info['coords']['loader']
-            cloader('coords', crfname, state, single_point = True)
-            eloader = self.data_info['extra']['loader']
-            eloader('extra', erfname, state, single_point = True)
+            cloader = self.data_info['trajectory']['loader']
+            cloader('trajectory', crfname, state, single_point = True)
+            eloader = self.data_info['restart']['loader']
+            eloader('restart', erfname, state, single_point = True)
             ploader = self.data_info['pcoord']['loader']
             ploader('pcoord', prfname, state, single_point = True)
         finally:

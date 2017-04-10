@@ -398,11 +398,6 @@ class WESTDataManager:
             aux_h5file['/'].attrs['west_file_format_version'] = file_format_version
             aux_h5file['/'].attrs['west_iter_prec'] = self.iter_prec
             aux_h5file['/'].attrs['iteration'] = self.current_iteration + 1
-            #aux_h5file['/'].create_dataset('summary',
-            #                                   shape=(1,), 
-            #                                   dtype=summary_table_dtype,
-            #                                   maxshape=(None,))
-            #self.we_h5file.create_group('/iterations')
         return aux_h5file
 
     def create_symlink(self, aux_h5file, h5file=None, symlink_name='auxdata', local_point='/'):
@@ -538,8 +533,8 @@ class WESTDataManager:
                 system = westpa.rc.get_system_driver()            
                 state_table = numpy.empty((len(basis_states),), dtype=bstate_dtype)
                 state_pcoords = numpy.empty((len(basis_states),system.pcoord_ndim), dtype=system.pcoord_dtype)
-                extra = []
-                coords = []
+                restart = []
+                trajectory = []
                 for i, state in enumerate(basis_states):
                     state.state_id = i
                     state_table[i]['label'] = state.label
@@ -547,13 +542,13 @@ class WESTDataManager:
                     state_table[i]['auxref'] = state.auxref or ''
                     state_pcoords[i] = state.pcoord
                     try:
-                        extra.append(state.data['extra'])
-                        coords.append(state.data['coords'])
+                        restart.append(state.data['restart'])
+                        trajectory.append(state.data['trajectory'])
                     except:
                         pass
                 
-                state_group['bstate_extra'] = extra
-                state_group['bstate_coords'] = coords
+                state_group['bstate_restart'] = restart
+                state_group['bstate_trajectory'] = trajectory
                 state_group['bstate_index'] = state_table
                 state_group['bstate_pcoord'] = state_pcoords
             
@@ -629,10 +624,8 @@ class WESTDataManager:
             state_ids = [state.state_id for state in initial_states]
             index_entries = ibstate_group['istate_index'][state_ids] 
             pcoord_vals = numpy.empty((len(initial_states), system.pcoord_ndim), dtype=system.pcoord_dtype)
-            #extra = numpy.empty((len(initial_states), 2), dtype=numpy.void)
-            #coords = numpy.empty((len(initial_states), 2), dtype=numpy.void)
-            extra = []
-            coords = []
+            restart = []
+            trajectory = []
             for i, initial_state in enumerate(initial_states):
                 index_entries[i]['iter_created'] = initial_state.iter_created
                 index_entries[i]['iter_used'] = initial_state.iter_used or InitialState.ISTATE_UNUSED
@@ -641,26 +634,23 @@ class WESTDataManager:
                 index_entries[i]['istate_status'] = initial_state.istate_status or InitialState.ISTATE_STATUS_PENDING
                 pcoord_vals[i] = initial_state.pcoord
                 try:
-                    extra.append(state.data['extra'])
-                    coords.append(state.data['coords'])
+                    restart.append(state.data['restart'])
+                    trajectory.append(state.data['trajectory'])
                 except:
                     pass
             
             try:
-                ibstate_group['istate_extra'] = extra
-                ibstate_group['istate_coords'] = coords
+                ibstate_group['istate_restart'] = restart
+                ibstate_group['istate_trajectory'] = trajectory
             except:
                 # just grow it.
-                extra = list(ibstate_group['istate_extra']) + extra
-                coords = list(ibstate_group['istate_coords']) + coords
-                del(ibstate_group['istate_extra'])
-                del(ibstate_group['istate_coords'])
-                ibstate_group['istate_extra'] = extra
-                ibstate_group['istate_coords'] = coords
+                restart = list(ibstate_group['istate_restart']) + restart
+                trajectory = list(ibstate_group['istate_trajectory']) + trajectory
+                del(ibstate_group['istate_restart'])
+                del(ibstate_group['istate_trajectory'])
+                ibstate_group['istate_restart'] = restart
+                ibstate_group['istate_trajectory'] = trajectory
                 pass
-            #istate_coords = ibstate_group.create_dataset('istate_pcoord', dtype=system.pcoord_dtype,
-            #                                                  shape=(n_states,system.pcoord_ndim),
-            #                                                  maxshape=(None,system.pcoord_ndim))
             
             ibstate_group['istate_index'][state_ids] = index_entries
             ibstate_group['istate_pcoord'][state_ids] = pcoord_vals
@@ -801,6 +791,7 @@ class WESTDataManager:
             # This is as good a place as any to do it.  We'll create the file and make the symlink.
             # we'll want to pull from the options to see if we'll be doing this, but normally, yes.
             # self.data_refs = config.get_path(['west', 'data', 'data_refs', 'iteration'], default=None)
+            # This needs to be fixed to actually work, as it just does it by default.
             if self.data_refs != None:
                 self.aux_h5file = self.create_new_auxdata_file(self.data_refs.format(n_iter=n_iter))
                 self.create_symlink(self.data_refs.format(n_iter=n_iter), iter_group, 'auxdata')
@@ -836,10 +827,10 @@ class WESTDataManager:
                 # THIS IS THE LINE.  We need to pass the information HERE.
                 if segment.parent_id >= 0:
                     parent_group = self.get_iter_group(n_iter-1)
-                    segment.parent = parent_group['auxdata']['extra'][segment.parent_id]
+                    segment.restart = parent_group['auxdata']['restart'][segment.parent_id]
                 else:
                     ibstate = self.find_ibstate_group(n_iter)
-                    segment.parent = ibstate['istate_extra'][(segment.parent_id*-1)-1]
+                    segment.restart = ibstate['istate_restart'][(segment.parent_id*-1)-1]
                     
                         
             if total_parents > 0:
@@ -1016,8 +1007,6 @@ class WESTDataManager:
         
         with self.lock:            
             iter_group = self.get_iter_group(n_iter)
-            if n_iter > 1:
-                parent_group = self.get_iter_group(n_iter-1)
             seg_index_ds = iter_group['seg_index']
             
             if file_version < 5:
@@ -1062,10 +1051,10 @@ class WESTDataManager:
                     segment.parent_id = long(row['parent_id'])
                 if segment.parent_id >= 0:
                     parent_group = self.get_iter_group(n_iter-1)
-                    segment.parent = parent_group['auxdata']['extra'][segment.parent_id]
+                    segment.restart = parent_group['auxdata']['restart'][segment.parent_id]
                 else:
                     ibstate = self.find_ibstate_group(n_iter)
-                    segment.parent = ibstate['istate_extra'][(segment.parent_id*-1)-1]
+                    segment.restart = ibstate['istate_restart'][(segment.parent_id*-1)-1]
                 segment.wtg_parent_ids = set(imap(long,wtg_parent_ids))
                 assert len(segment.wtg_parent_ids) == wtg_n_parents
                 segments.append(segment)

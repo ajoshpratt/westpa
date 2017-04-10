@@ -60,7 +60,7 @@ class Segment:
     
     def __init__(self, n_iter = None, seg_id = None, weight = None, 
                  endpoint_type = None,
-                 parent_id = None,  wtg_parent_ids = None, parent = None, 
+                 parent_id = None,  wtg_parent_ids = None, restart = None, 
                  pcoord = None,
                  status = None, walltime = None, cputime = None,
                  data = None):
@@ -75,7 +75,7 @@ class Segment:
         self.seg_id = long(seg_id) if seg_id is not None else None
         self.status = int(status)  if status is not None else None
         self.parent_id = long(parent_id) if parent_id is not None else None
-        self.parent = parent if parent is not None else None
+        self.restart = restart if restart is not None else None
         self.endpoint_type = int(endpoint_type) if endpoint_type else self.SEG_ENDPOINT_UNSET
         
         self.weight = float(weight) if weight is not None else None
