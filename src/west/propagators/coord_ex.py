@@ -61,29 +61,50 @@ def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point):
                                                                                                     expected_shape))
     destobj.pcoord = pcoord
 
-def coords_input(fieldname, coord_file, segment, single_point):
+def trajectory_input(fieldname, coord_file, segment, single_point):
     # We'll assume it's... for the moment, who cares, just pickle it.
     # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
     with open (coord_file, mode='rb') as file:
         data = numpy.void(file.read())
-    segment.data[fieldname] = data
+    segment.data['trajectories/{}'.format(fieldname)] = data
     if data.nbytes == 0:
         raise ValueError('could not read any coordinate data for {}'.format(fieldname))
 
-def coords_output(fieldname, coord_file, segment, single_point):
+def restart_input(fieldname, coord_file, segment, single_point):
     # We'll assume it's... for the moment, who cares, just pickle it.
     # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
-    with open (coord_file, mode='wb') as file:
-        file.write(segment.data[fieldname])
+    # It's actually a directory, in this case.
+    import tarfile, StringIO, os
+    d = StringIO.StringIO()
+    t = tarfile.open(mode='w:', fileobj=d)
+    #for filename in os.listdir(coord_file):
+    t.add(coord_file, arcname='.')
+    data = numpy.void(d.getvalue())
+    segment.data['trajectories/{}'.format(fieldname)] = data
+    t.close()
+    d.close()
+    if data.nbytes == 0:
+        raise ValueError('could not read any coordinate data for {}'.format(fieldname))
 
-def extra_parent_output(tarball, restart):
+def restart_output(tarball, restart):
     # We'll assume it's... for the moment, who cares, just pickle it.
     # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
-    with open (tarball, mode='wb') as file:
-        file.write(restart)
+    import tarfile, StringIO, os, io
+    e, name = tempfile.mkstemp()
+    os.close(e)
+    #d.close()
+    d = open(name, mode='wb')
+    d.write(restart)
+    d.close()
+    d = open(name, mode='rb')
+    t = tarfile.open(fileobj=d)
+    t.extractall(tarball)
+    t.close()
+    #with open (tarball, mode='wb') as file:
+    #    file.write(restart)
 
 def aux_data_loader(fieldname, data_filename, segment, single_point):
     data = numpy.loadtxt(data_filename)
@@ -195,15 +216,15 @@ class ExecutablePropagator(WESTPropagator):
                                     'loader': pcoord_loader,
                                     'enabled': True,
                                     'filename': None}
-        self.data_info['trajectory'] = {'name': 'trajectory',
-                                    'loader': coords_input,
+        self.data_info['trajectory'] = {'name': 'auxdata/trajectory',
+                                    'loader': trajectory_input,
                                     'enabled': True,
                                     'filename': None}
         # This is for stuff like restart files, etc.  That is, the things we'll need to continue the simulation.
         # For now, tar it, pickle it, and call it a day.
         # Then we untar, unpickle, and go from there.
-        self.data_info['restart'] =  {'name': 'restart',
-                                    'loader': coords_input,
+        self.data_info['restart'] =  {'name': 'auxdata/restart',
+                                    'loader': restart_input,
                                     'enabled': True,
                                     'filename': None}
         dataset_configs = config.get(['west', 'executable', 'datasets']) or []
@@ -389,11 +410,11 @@ class ExecutablePropagator(WESTPropagator):
             import shutil
             shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
             os.makedirs(environ['WEST_CURRENT_SEG_DATA_REF'])
-        extra_parent_output(tarball='{}/parent.tar'.format(environ['WEST_CURRENT_SEG_DATA_REF']), restart=segment.restart)
+        restart_output(tarball='{}/'.format(environ['WEST_CURRENT_SEG_DATA_REF']), restart=segment.restart)
 
     def cleanup_file_system(self, child_info, segment, environ):
         import h5py, os, shutil
-        shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
+        #shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
             
     def exec_for_iteration(self, child_info, n_iter, addtl_env = None):
         '''Execute a child process with environment and template expansion from the given
@@ -441,8 +462,7 @@ class ExecutablePropagator(WESTPropagator):
         os.close(pfd)
         cfd, crfname = tempfile.mkstemp()
         os.close(cfd)
-        efd, erfname = tempfile.mkstemp()
-        os.close(efd)
+        erfname = tempfile.mkdtemp()
         
         addtl_env = {self.ENV_PCOORD_RETURN:     prfname,
                      self.ENV_RESTART_RETURN:    erfname,
@@ -535,6 +555,11 @@ class ExecutablePropagator(WESTPropagator):
                 if return_template:
                     return_files[dataset] = self.makepath(return_template, self.template_args_for_segment(segment))
                     del_return_files[dataset] = False
+                elif dataset == 'restart':
+                    rfname = tempfile.mkdtemp()
+                    #os.close(fd)
+                    return_files[dataset] = rfname
+                    del_return_files[dataset] = True
                 else: 
                     (fd, rfname) = tempfile.mkstemp()
                     os.close(fd)
@@ -542,6 +567,7 @@ class ExecutablePropagator(WESTPropagator):
                     del_return_files[dataset] = True
 
                 addtl_env['WEST_{}_RETURN'.format(dataset.upper())] = return_files[dataset]
+                # This is where it all goes down.
                                         
             # We're going to want to output the extra coordinates used for stuff...
 
@@ -572,20 +598,31 @@ class ExecutablePropagator(WESTPropagator):
                 filename = return_files[dataset]
                 loader = self.data_info[dataset]['loader']
                 segment.file_type = self.trajectory_types
-                try:
-                    loader(dataset, filename, segment, single_point=False)
-                except Exception as e:
-                    log.error('could not read {} from {!r}: {!r}'.format(dataset, filename, e))
-                    segment.status = Segment.SEG_STATUS_FAILED 
-                    break
-                else:
+                #try:
+                
+                loader(dataset, filename, segment, single_point=False)
+                #except Exception as e:
+                #    log.error('could not read {} from {!r}: {!r}'.format(dataset, filename, e))
+                #    segment.status = Segment.SEG_STATUS_FAILED 
+                #    break
+                #else:
+                if True:
                     if del_return_files[dataset]:
-                        try:
-                            os.unlink(filename)
-                        except Exception as e:
-                            log.warning('could not delete {} file {!r}: {!r}'.format(dataset, filename, e))
+                        if dataset == 'restart':
+                            try:
+                                import shutil
+                                shutil.rmtree(filename)
+                            except Exception as e:
+                                log.warning('could not delete {} file {!r}: {!r}'.format(dataset, filename, e))
+                            else:
+                                log.debug('deleted {} directory {!r}'.format(dataset, filename))    
                         else:
-                            log.debug('deleted {} file {!r}'.format(dataset, filename))    
+                            try:
+                                os.unlink(filename)
+                            except Exception as e:
+                                log.warning('could not delete {} file {!r}: {!r}'.format(dataset, filename, e))
+                            else:
+                                log.debug('deleted {} file {!r}'.format(dataset, filename))    
             if segment.status == Segment.SEG_STATUS_FAILED:
                 continue
                                         

@@ -385,8 +385,8 @@ class WESTDataManager:
                 self.we_h5file.flush()
                 self.last_flush = time.time()
 
-    def create_new_auxdata_file(self, h5filename): #istates):
-        '''Create new HDF5 file that can be used to symlink in auxdata.'''
+    def create_new_external_h5file(self, h5filename): #istates):
+        '''Create new HDF5 file that can be used to symlink in extra.'''
         # This is mostly just here for convenience, right now.  I think it's the right place to put it in there.
         # We'll return it and use it in the data manager and set it as an option to store auxfiles.
         aux_h5file = h5py.File(h5filename, 'w', driver=self.we_h5file_driver, flags="NPY_ARRAY_FORCECAST")
@@ -542,8 +542,8 @@ class WESTDataManager:
                     state_table[i]['auxref'] = state.auxref or ''
                     state_pcoords[i] = state.pcoord
                     try:
-                        restart.append(state.data['restart'])
-                        trajectory.append(state.data['trajectory'])
+                        restart.append(state.data['trajectories/restart'])
+                        trajectory.append(state.data['trajectories/trajectory'])
                     except:
                         pass
                 
@@ -634,8 +634,8 @@ class WESTDataManager:
                 index_entries[i]['istate_status'] = initial_state.istate_status or InitialState.ISTATE_STATUS_PENDING
                 pcoord_vals[i] = initial_state.pcoord
                 try:
-                    restart.append(state.data['restart'])
-                    trajectory.append(state.data['trajectory'])
+                    restart.append(state.data['trajectories/restart'])
+                    trajectory.append(state.data['trajectories/trajectory'])
                 except:
                     pass
             
@@ -793,8 +793,8 @@ class WESTDataManager:
             # self.data_refs = config.get_path(['west', 'data', 'data_refs', 'iteration'], default=None)
             # This needs to be fixed to actually work, as it just does it by default.
             if self.data_refs != None:
-                self.aux_h5file = self.create_new_auxdata_file(self.data_refs.format(n_iter=n_iter))
-                self.create_symlink(self.data_refs.format(n_iter=n_iter), iter_group, 'auxdata')
+                self.aux_h5file = self.create_new_external_h5file(self.data_refs.format(n_iter=n_iter))
+                self.create_symlink(self.data_refs.format(n_iter=n_iter), iter_group, 'auxdata/trajectories')
                                     
             
             total_parents = 0
@@ -825,12 +825,12 @@ class WESTDataManager:
                         pcoord[seg_id,...] = segment.pcoord
                 #try:
                 # THIS IS THE LINE.  We need to pass the information HERE.
-                if segment.parent_id >= 0:
-                    parent_group = self.get_iter_group(n_iter-1)
-                    segment.restart = parent_group['auxdata']['restart'][segment.parent_id]
-                else:
+                if segment.parent_id < 0:
                     ibstate = self.find_ibstate_group(n_iter)
                     segment.restart = ibstate['istate_restart'][(segment.parent_id*-1)-1]
+                else:
+                    parent_group = self.get_iter_group(n_iter-1)
+                    segment.restart = parent_group['auxdata/trajectories/restart'][segment.parent_id]
                     
                         
             if total_parents > 0:
@@ -1051,7 +1051,7 @@ class WESTDataManager:
                     segment.parent_id = long(row['parent_id'])
                 if segment.parent_id >= 0:
                     parent_group = self.get_iter_group(n_iter-1)
-                    segment.restart = parent_group['auxdata']['restart'][segment.parent_id]
+                    segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
                 else:
                     ibstate = self.find_ibstate_group(n_iter)
                     segment.restart = ibstate['istate_restart'][(segment.parent_id*-1)-1]
