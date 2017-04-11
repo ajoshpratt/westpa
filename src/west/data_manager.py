@@ -200,8 +200,7 @@ class WESTDataManager:
     default_we_h5filename      = 'west.h5'
     default_we_h5file_driver   = None
     default_flush_period = 60
-    default_data_refs          = '$WEST_SIM_ROOT/traj_segs/{segment.n_iter:06d}/'
-    #default_store_aux_in_sym   = False
+    default_data_refs          = '$WEST_SIM_ROOT/trajectories/{segment.n_iter:06d}.h5'
     
     # Compress any auxiliary dataset whose total size (across all segments) is more than 1MB
     default_aux_compression_threshold = 1048576
@@ -237,7 +236,7 @@ class WESTDataManager:
         # For storing trajectory coordinates as axudata...
         # We'll probably want to fancy this up later, but for now, it should work.
 
-        self.data_refs = config.get_path(['west', 'data', 'data_refs', 'iteration'], default=self.default_data_refs)
+        self.data_refs = config.get_path(['west', 'data', 'data_refs', 'trajectories'], default=self.default_data_refs)
         #self.store_aux_in_sym = config.get_path(['west', 'data', 'aux_data_file'], self.default_store_aux_in_sym)
         
         # Process dataset options

@@ -168,13 +168,13 @@ class ExecutablePropagator(WESTPropagator):
         config = self.rc.config
         
         for key in [('west','executable','propagator','executable'),
-                    ('west','data','data_refs','iteration'),
-                    ('west','data','data_refs','segment'),
+                    ('west','data','data_refs','trajectories'),
+                    ('west','data','data_refs','seg_rundir'),
                     ('west','data','data_refs','basis_state'),
                     ('west','data','data_refs','initial_state')]:
             config.require(key)
  
-        self.segment_ref_template       = config['west','data','data_refs','segment']
+        self.segment_ref_template       = config['west','data','data_refs','seg_rundir']
         self.basis_state_ref_template   = config['west','data','data_refs','basis_state']
         self.initial_state_ref_template = config['west','data','data_refs','initial_state']
         self.trajectory_types           = config['west','data','data_refs','trajectory_type'] 
