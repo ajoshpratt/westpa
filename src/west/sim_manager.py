@@ -58,6 +58,8 @@ class WESimManager:
         self.save_transition_matrices = config.get(['west', 'propagation', 'save_transition_matrices'], False)
         self.max_run_walltime = config.get(['west', 'propagation', 'max_run_wallclock'], default=None)
         self.max_total_iterations = config.get(['west', 'propagation', 'max_total_iterations'], default=None)
+        # Just a temp fix for reporting storage.
+        self.data_refs = config.get_path(['west', 'data', 'data_refs', 'trajectories'])
             
     
     def __init__(self, rc=None):        
@@ -479,10 +481,13 @@ class WESimManager:
             futures.add(future)
             segment_futures.add(future)
         
+        # Since we're storing trajectories, this is now slow slow sloooooow.
+        result_futures = []
         while futures:
             # TODO: add capacity for timeout or SIGINT here
             future = self.work_manager.wait_any(futures)
             futures.remove(future)
+            # block the results.  The function already supports block writing.
             
             if future in segment_futures:
                 segment_futures.remove(future)
@@ -496,10 +501,8 @@ class WESimManager:
                 new_istate_futures = self.get_istate_futures()
                 istate_gen_futures.update(new_istate_futures)
                 futures.update(new_istate_futures)
+                result_futures.append(incoming)
                 
-                with self.data_manager.expiring_flushing_lock():                        
-                    self.data_manager.update_segments(self.n_iter, incoming)
-
             elif future in istate_gen_futures:
                 istate_gen_futures.remove(future)
                 _basis_state, initial_state = future.get_result()
@@ -511,7 +514,18 @@ class WESimManager:
             else:
                 log.error('unknown future {!r} received from work manager'.format(future))
                 raise AssertionError('untracked future {!r}'.format(future))                    
-                    
+
+            if len(result_futures) >= self.propagator_block_size:
+                with self.data_manager.expiring_flushing_lock():                        
+                    self.data_manager.update_segments(self.n_iter, result_futures)
+                    result_futures = []
+                #result_futures = self.work_manager.submit(self.data_manager.update_segments, args=(self.n_iter, incoming))
+
+
+        if len(result_futures) > 0:
+            with self.data_manager.expiring_flushing_lock():                        
+                self.data_manager.update_segments(self.n_iter, incoming)
+        
         log.debug('done with propagation')
         self.save_bin_data()
         self.data_manager.flush_backing()
@@ -678,9 +692,15 @@ class WESimManager:
                 except ValueError:
                     cputime = 0.0      
 
-                self.rc.pstatus('Iteration wallclock: {0!s}, cputime: {1!s}\n'\
+                self.rc.pstatus('Iteration wallclock: {0!s}, cputime: {1!s}'\
                                           .format(walltime,
                                                   cputime))
+                import os
+                #try:
+                self.rc.pstatus('{0} size in MB: {1}\n'\
+                                      .format(self.data_refs.format(n_iter=self.n_iter-1), float(os.path.getsize(self.data_refs.format(n_iter=self.n_iter-1)))/1024/1024))
+                #except:
+                #    pass
                 self.rc.pflush()
             finally:
                 self.data_manager.flush_backing()

@@ -225,7 +225,7 @@ class WESTDataManager:
             config.require_type_if_present(['west', 'data', entry], type_)
             
         self.we_h5filename = config.get_path(['west', 'data', 'west_data_file'], default=self.default_we_h5filename)
-        self.we_h5file_driver = config.get_choice(['data', 'west_data_file_driver'], [None, 'sec2', 'family'],
+        self.we_h5file_driver = config.get_choice(['data', 'west_data_file_driver'], [None, 'sec2', 'family', 'core'],
                                                   default=self.default_we_h5file_driver,
                                                   value_transform=(lambda x: x.lower() if x else None))
         self.iter_prec = config.get(['west', 'data', 'iter_prec'], self.default_iter_prec)
@@ -634,7 +634,7 @@ class WESTDataManager:
                 if self.we_h5file_version == 8:
                     try:
                         restart.append(initial_state.data['trajectories/restart'])
-                    except KeyError:
+                    except:
                         # Not sure what's causing this right now.  Just pass.
                         pass
             
@@ -642,10 +642,10 @@ class WESTDataManager:
                 try:
                     # just grow it.  Void datatypes seem a little more difficult to work with, and I'm not strictly sure how best to handle them so far.
                     restart = list(ibstate_group['istate_restart']) + restart
-                    del(ibstate_group['istate_restart'])
-                    ibstate_group['istate_restart'] = numpy.array(restart)
-                except KeyError:
-                    ibstate_group['istate_restart'] = numpy.array(restart)
+                    del ibstate_group['istate_restart']
+                    ibstate_group['istate_restart'] = numpy.array(restart, dtype=numpy.void)
+                except:
+                    ibstate_group['istate_restart'] = numpy.array(restart, dtype=numpy.void)
             
             ibstate_group['istate_index'][state_ids] = index_entries
             ibstate_group['istate_pcoord'][state_ids] = pcoord_vals

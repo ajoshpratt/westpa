@@ -34,6 +34,8 @@ from west import Segment
 from west.propagators import WESTPropagator
 #from westtools import WESTDataReader
 from west.data_manager import WESTDataManager
+import tarfile, StringIO, os, io, cStringIO
+
 
 def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point):
     """Read progress coordinate data into the ``pcoord`` field on ``destobj``. 
@@ -68,43 +70,35 @@ def trajectory_input(fieldname, coord_file, segment, single_point):
     with open (coord_file, mode='rb') as file:
         data = numpy.void(file.read())
     segment.data['trajectories/{}'.format(fieldname)] = data
-    if data.nbytes == 0:
-        raise ValueError('could not read any coordinate data for {}'.format(fieldname))
+    #segment.data['trajectories/{}'.format(fieldname)] = numpy.ones((1,))
+    #if data.nbytes == 0:
+    #    raise ValueError('could not read any coordinate data for {}'.format(fieldname))
 
 def restart_input(fieldname, coord_file, segment, single_point):
     # We'll assume it's... for the moment, who cares, just pickle it.
     # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
     # It's actually a directory, in this case.
-    import tarfile, StringIO, os
-    d = StringIO.StringIO()
+    d = cStringIO.StringIO()
     t = tarfile.open(mode='w:', fileobj=d)
     #for filename in os.listdir(coord_file):
     t.add(coord_file, arcname='.')
-    data = numpy.void(d.getvalue())
-    segment.data['trajectories/{}'.format(fieldname)] = data
-    t.close()
-    d.close()
-    if data.nbytes == 0:
-        raise ValueError('could not read any coordinate data for {}'.format(fieldname))
+    #data = numpy.void(d.getvalue())
+    segment.data['trajectories/{}'.format(fieldname)] = numpy.void(d.getvalue())
+    del(d,t)
+    #t.close()
+    #d.close()
+    #if data.nbytes == 0:
+    #    raise ValueError('could not read any coordinate data for {}'.format(fieldname))
 
 def restart_output(tarball, restart):
     # We'll assume it's... for the moment, who cares, just pickle it.
     # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
-    import tarfile, StringIO, os, io
-    e, name = tempfile.mkstemp()
-    os.close(e)
-    #d.close()
-    d = open(name, mode='wb')
-    d.write(restart)
-    d.close()
-    d = open(name, mode='rb')
-    t = tarfile.open(fileobj=d)
-    t.extractall(tarball)
-    t.close()
-    #with open (tarball, mode='wb') as file:
-    #    file.write(restart)
+    e = io.BytesIO(restart.tobytes())
+    t = tarfile.open(fileobj=e, mode='r:')
+    t.extractall(path=tarball)
+    del(e,t)
 
 def aux_data_loader(fieldname, data_filename, segment, single_point):
     data = numpy.loadtxt(data_filename)
@@ -413,6 +407,7 @@ class ExecutablePropagator(WESTPropagator):
 
     def cleanup_file_system(self, child_info, segment, environ):
         shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
+        #return 0
             
     def exec_for_iteration(self, child_info, n_iter, addtl_env = None):
         '''Execute a child process with environment and template expansion from the given
@@ -537,6 +532,7 @@ class ExecutablePropagator(WESTPropagator):
     def propagate(self, segments):
         child_info = self.exe_info['propagator']
         
+        print(len(segments))
         for segment in segments:
             starttime = time.time()
 
@@ -625,5 +621,5 @@ class ExecutablePropagator(WESTPropagator):
             segment.walltime = time.time() - starttime
             segment.cputime = rusage.ru_utime
         # Clean up the file system.
-        shutil.rmtree(self.segment_rundir)
+        #shutil.rmtree(self.segment_rundir)
         return segments
