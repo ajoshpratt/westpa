@@ -16,7 +16,7 @@
 # along with WESTPA.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import os, sys, signal, random, subprocess, time, tempfile
+import os, shutil, sys, signal, random, subprocess, time, tempfile
 import numpy
 import logging
 from west.states import BasisState, InitialState
@@ -174,7 +174,8 @@ class ExecutablePropagator(WESTPropagator):
                     ('west','data','data_refs','initial_state')]:
             config.require(key)
  
-        self.segment_ref_template       = config['west','data','data_refs','seg_rundir']
+        self.segment_rundir             = config['west','data','data_refs','seg_rundir']
+        self.segment_ref_template       = self.segment_rundir + '/{segment.n_iter:06d}/{segment.seg_id:06d}'
         self.basis_state_ref_template   = config['west','data','data_refs','basis_state']
         self.initial_state_ref_template = config['west','data','data_refs','initial_state']
         self.trajectory_types           = config['west','data','data_refs','trajectory_type'] 
@@ -403,18 +404,15 @@ class ExecutablePropagator(WESTPropagator):
         return self.exec_child_from_child_info(child_info, template_args, environ)
 
     def prepare_file_system(self, child_info, segment, environ):
-        import h5py, os
         try:
             os.makedirs(environ['WEST_CURRENT_SEG_DATA_REF'])
         except:
-            import shutil
             shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
             os.makedirs(environ['WEST_CURRENT_SEG_DATA_REF'])
         restart_output(tarball='{}/'.format(environ['WEST_CURRENT_SEG_DATA_REF']), restart=segment.restart)
 
     def cleanup_file_system(self, child_info, segment, environ):
-        import h5py, os, shutil
-        #shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
+        shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
             
     def exec_for_iteration(self, child_info, n_iter, addtl_env = None):
         '''Execute a child process with environment and template expansion from the given
@@ -598,19 +596,16 @@ class ExecutablePropagator(WESTPropagator):
                 filename = return_files[dataset]
                 loader = self.data_info[dataset]['loader']
                 segment.file_type = self.trajectory_types
-                #try:
-                
-                loader(dataset, filename, segment, single_point=False)
-                #except Exception as e:
-                #    log.error('could not read {} from {!r}: {!r}'.format(dataset, filename, e))
-                #    segment.status = Segment.SEG_STATUS_FAILED 
-                #    break
-                #else:
-                if True:
+                try:
+                    loader(dataset, filename, segment, single_point=False)
+                except Exception as e:
+                    log.error('could not read {} from {!r}: {!r}'.format(dataset, filename, e))
+                    segment.status = Segment.SEG_STATUS_FAILED 
+                    break
+                else:
                     if del_return_files[dataset]:
                         if dataset == 'restart':
                             try:
-                                import shutil
                                 shutil.rmtree(filename)
                             except Exception as e:
                                 log.warning('could not delete {} file {!r}: {!r}'.format(dataset, filename, e))
@@ -629,4 +624,6 @@ class ExecutablePropagator(WESTPropagator):
             # Record timing info
             segment.walltime = time.time() - starttime
             segment.cputime = rusage.ru_utime
+        # Clean up the file system.
+        shutil.rmtree(self.segment_rundir)
         return segments
