@@ -483,6 +483,7 @@ class WESimManager:
         
         # Since we're storing trajectories, this is now slow slow sloooooow.
         result_futures = []
+        new_state_futures = []
         while futures:
             # TODO: add capacity for timeout or SIGINT here
             future = self.work_manager.wait_any(futures)
@@ -508,8 +509,7 @@ class WESimManager:
                 _basis_state, initial_state = future.get_result()
                 log.debug('received newly-prepared initial state {!r}'.format(initial_state))
                 initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
-                with self.data_manager.expiring_flushing_lock():
-                    self.data_manager.update_initial_states([initial_state], n_iter=self.n_iter+1)
+                new_state_futures.append(initial_state)
                 self.we_driver.avail_initial_states[initial_state.state_id] = initial_state
             else:
                 log.error('unknown future {!r} received from work manager'.format(future))
@@ -520,11 +520,18 @@ class WESimManager:
                     self.data_manager.update_segments(self.n_iter, result_futures)
                     result_futures = []
                 #result_futures = self.work_manager.submit(self.data_manager.update_segments, args=(self.n_iter, incoming))
+            if len(new_state_futures) >= self.propagator_block_size:
+                with self.data_manager.expiring_flushing_lock():
+                    self.data_manager.update_initial_states(new_state_futures, n_iter=self.n_iter+1)
+                    new_state_futures = []
 
 
         if len(result_futures) > 0:
             with self.data_manager.expiring_flushing_lock():                        
                 self.data_manager.update_segments(self.n_iter, incoming)
+        if len(new_state_futures) > 0:
+            with self.data_manager.expiring_flushing_lock():
+                self.data_manager.update_initial_states(new_state_futures, n_iter=self.n_iter+1)
         
         log.debug('done with propagation')
         self.save_bin_data()
