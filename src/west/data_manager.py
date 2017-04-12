@@ -111,7 +111,8 @@ vstr_dtype = h5py.new_vlen(str)
 #vvoid_dtype = h5py.new_vlen(numpy.dtype('V'))
 #vvoid_dtype = h5py.new_vlen(numpy.dtype('uint8'))
 #vvoid_dtype = h5py.special_dtype(vlen=numpy.dtype('V')) # Trying to store arbitrary data.  Not working so well...
-vvoid_dtype = h5py.new_vlen(str)
+vvoid_dtype = h5py.special_dtype(vlen=str) # Trying to store arbitrary data.  Not working so well...
+#vvoid_dtype = h5py.new_vlen(str)
 h5ref_dtype = h5py.special_dtype(ref=h5py.Reference)
 binhash_dtype = numpy.dtype('|S64')
 
@@ -575,7 +576,7 @@ class WESTDataManager:
                 return []
             bstate_pcoords = ibstate_group['bstate_pcoord'][...]
             bstates = [BasisState(state_id=i, label=row['label'], probability=row['probability'],
-                                  auxref = str(row['auxref']) or None, pcoord=pcoord.copy())
+                                  auxref = str(row['auxref']) or None, pcoord=pcoord.copy(), data={'trajectories/restart': row['restart']})
                        for (i, (row, pcoord))  in enumerate(izip(bstate_index, bstate_pcoords))]
             return bstates
             
@@ -658,7 +659,7 @@ class WESTDataManager:
             for state_id, (state, pcoord) in enumerate(izip(istate_index, istate_pcoords)):
                 states.append(InitialState(state_id=state_id, basis_state_id=long(state['basis_state_id']),
                                            iter_created=int(state['iter_created']), iter_used=int(state['iter_used']),
-                                           istate_type=int(state['istate_type']), pcoord=pcoord.copy()))
+                                           istate_type=int(state['istate_type']), pcoord=pcoord.copy(), data={'trajectories/restart': state['restart']}))
             return states
                 
     def get_segment_initial_states(self, segments, n_iter=None):
@@ -822,7 +823,8 @@ class WESTDataManager:
                         segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
                     else:
                         parent_group = self.get_iter_group(n_iter-1)
-                        segment.restart = parent_group['auxdata/trajectories/restart'][segment.parent_id]
+                        import copy
+                        segment.restart = copy.copy(parent_group['auxdata/trajectories/restart'][segment.parent_id])
                     
                         
             if total_parents > 0:
@@ -951,6 +953,9 @@ class WESTDataManager:
                     for dsname in segment.data:
                         data = numpy.asarray(segment.data[dsname],order='C')
                         segment.data[dsname] = data
+                        # We don't support datasets with different shapes, it seems.
+                        # or maybe we do?
+                        print(data.dtype)
                         dsets[dsname] = (data.shape, data.dtype)
                       
             # Then we iterate over data sets and store data
@@ -1045,7 +1050,7 @@ class WESTDataManager:
                     import copy
                     if segment.parent_id >= 0:
                         parent_group = self.get_iter_group(n_iter-1)
-                        segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
+                        segment.restart = copy.copy(parent_group['auxdata/trajectories']['restart'][segment.parent_id])
                     else:
                         ibstate = self.find_ibstate_group(n_iter)
                         segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
@@ -1511,15 +1516,15 @@ def create_dataset_from_dsopts(group, dsopts, shape=None, dtype=None, data=None,
             'shuffle': shuffle,
             'chunks': chunks}
     
-    try:
-        import h5py._hl.filters
-        h5py._hl.filters._COMP_FILTERS['scaleoffset']
-    except (ImportError,KeyError,AttributeError):
+    #try:
+    #    import h5py._hl.filters
+    #    h5py._hl.filters._COMP_FILTERS['scaleoffset']
+    #except (ImportError,KeyError,AttributeError):
         # filter not available, or an unexpected version of h5py
         # use lossless compression instead
-        opts['compression'] = True
-    else:
-        opts['scaleoffset'] = scaleoffset
+    opts['compression'] = True
+    #else:
+    #    opts['scaleoffset'] = scaleoffset
             
     if log.isEnabledFor(logging.DEBUG):
         log.debug('requiring aux dataset {!r}, shape={!r}, opts={!r}'

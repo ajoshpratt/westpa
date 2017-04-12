@@ -81,14 +81,28 @@ def restart_input(fieldname, coord_file, segment, single_point):
     # It's actually a directory, in this case.
     #d = cStringIO.StringIO()
     d = io.BytesIO()
+    #print(d.getvalue())
     t = tarfile.open(mode='w:', fileobj=d)
-    #for filename in os.listdir(coord_file):
+    #with tarfile.open(mode='w', fileobj=d) as t:
     t.add(coord_file, arcname='.')
+    print(segment)
+    for file in t.getmembers():
+        print(file.name, file.size)
+    import copy
+    segment.data['trajectories/{}'.format(fieldname)] = cPickle.dumps(copy.copy(d.getvalue()), protocol=0).encode('base64')
+    assert segment.data['trajectories/{}'.format(fieldname)] == cPickle.dumps(d.getvalue(), protocol=0).encode('base64')
     t.close()
-    segment.data['trajectories/{}'.format(fieldname)] = cPickle.dumps(d.getvalue())
     d.close()
+    e = io.BytesIO(cPickle.loads(segment.data['trajectories/{}'.format(fieldname)].decode('base64')))
+    with tarfile.open(fileobj=e, mode='r') as t:
+    #    t.extractall(path='/tmp')
+        for file in t.getmembers():
+            print(file.name, file.size)
+    #log.debug('{fieldname} for seg_id {segment.seg_id} successfully loaded in iter {segment.n_iter} .'.format(segment=segment, fieldname=fieldname))
+    #d.close()
     #del(d,t)
     #assert segment.data['trajectories/{}'.format(fieldname)].nbytes != 0
+    #print(cPickle.loads(segment.data['trajectories/{}'.format(fieldname)]))
     
     #if data.nbytes == 0:
     #    raise ValueError('could not read any coordinate data for {}'.format(fieldname))
@@ -97,14 +111,25 @@ def restart_output(tarball, segment):
     # We'll assume it's... for the moment, who cares, just pickle it.
     # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
+    import copy
 
-    e = io.BytesIO(cPickle.loads(segment.restart))
-    t = tarfile.open(fileobj=e, mode='r:')
-    t.extractall(path=tarball)
-    t.close()
+    #print(segment)
+    #print(segment.data.keys())
+    e = io.BytesIO(cPickle.loads(copy.copy(segment.restart).decode('base64')))
+    #print(e.getvalue())
+    #e = io.BytesIO()
+    #e.write(cPickle.loads(segment.restart))
+    #e.close()
+    #e = cStringIO.StringIO(cPickle.loads(copy.copy(segment.restart)))
+    #t = tarfile.open(fileobj=e, mode='r:')
+    with tarfile.open(fileobj=e, mode='r') as t:
+        t.extractall(path=tarball)
+    log.debug('Restart for seg_id {segment.seg_id} successfully untarred in iter {segment.n_iter} .'.format(segment=segment))
     e.close()
+    #t.close()
+    #e.close()
         
-    del(e,t)
+    #del(e,t)
 
 def aux_data_loader(fieldname, data_filename, segment, single_point):
     data = numpy.loadtxt(data_filename)
@@ -224,10 +249,12 @@ class ExecutablePropagator(WESTPropagator):
         # This is for stuff like restart files, etc.  That is, the things we'll need to continue the simulation.
         # For now, tar it, pickle it, and call it a day.
         # Then we untar, unpickle, and go from there.
+        import h5py
         self.data_info['restart'] =  {'name': 'auxdata/trajectories/restart',
                                     'loader': restart_input,
                                     'enabled': True,
-                                    'filename': None}
+                                    'filename': None,
+                                    'dtype': h5py.new_vlen(str)}
         dataset_configs = config.get(['west', 'executable', 'datasets']) or []
         for dsinfo in dataset_configs:
             try:
