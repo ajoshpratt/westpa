@@ -358,8 +358,9 @@ class WEDriver:
                 
                 
                 segment.parent_id = -(initial_state.state_id+1)
-                if 'restart' in initial_state.data:
-                    segment.restart = initial_state.data['trajectories/restart'],
+                segment.restart = initial_state.data['trajectories/restart'],
+                # We might have to do this, too...
+                #segment.data['trajectories/restart'] = initial_state.data['trajectories/restart']
                 segment.pcoord[0] = initial_state.pcoord
 
                 self.new_weights.append(NewWeightEntry(source_type=NewWeightEntry.NW_SOURCE_RECYCLED,
@@ -403,7 +404,8 @@ class WEDriver:
                                   pcoord = segment.pcoord.copy(),
                                   status = Segment.SEG_STATUS_PREPARED)
             if 'restart' in segment.data:
-                new_segment.restart = segment.data['trajectories/restart'],
+                #new_segment.restart = segment.data['trajectories/restart'],
+                new_segment.restart = segment.restart,
             new_segment.pcoord[0,:] = segment.pcoord[0,:]
             new_segments.append(new_segment)
             
@@ -440,7 +442,8 @@ class WEDriver:
         glom.parent_id = gparent_seg.parent_id
         glom.pcoord[0,:] = gparent_seg.pcoord[0,:]
         if 'restart' in gparent_seg.data:
-            glom.restart = gparent_seg.data['trajectories/restart'],
+            #glom.restart = gparent_seg.data['trajectories/restart'],
+            glom.restart = gparent_seg.restart,
         
         # Weight comes from all segments being merged, and therefore all their
         # parent segments
@@ -669,7 +672,8 @@ class WEDriver:
                                       pcoord=new_pcoord_array(),
                                       status=Segment.SEG_STATUS_PREPARED)
                 if 'restart' in segment.data:
-                    new_segment.restart = segment.data['trajectories/restart'],
+                    #new_segment.restart = segment.data['trajectories/restart'],
+                    new_segment.restart = segment.restart,
                 new_segment.pcoord[0] = segment.pcoord[0]
                 self.next_iter_binning[ibin].add(new_segment)
                 
@@ -709,8 +713,9 @@ class WEDriver:
                                       wtg_parent_ids=[segment.seg_id],
                                       pcoord=new_pcoord_array(),
                                       status=Segment.SEG_STATUS_PREPARED)
+                import copy
                 if 'restart' in segment.data:
-                    new_segment.restart = segment.data['trajectories/restart'],
+                    new_segment.restart = copy.copy(segment.data['trajectories/restart']),
                 new_segment.pcoord[0] = segment.pcoord[-1]
                 self.next_iter_binning[ibin].add(new_segment)
                 

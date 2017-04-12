@@ -454,6 +454,8 @@ class WESimManager:
                 log.debug('using basis state {!r} directly'.format(basis_state))
                 initial_state.istate_type = InitialState.ISTATE_TYPE_BASIS
                 initial_state.pcoord = basis_state.pcoord.copy()
+                initial_state.restart = basis_state.restart.copy()
+                initial_state.data = basis_state.copy()
                 initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
                 self.we_driver.avail_initial_states[initial_state.state_id] = initial_state
             updated_states.append(initial_state)
@@ -509,8 +511,8 @@ class WESimManager:
                 _basis_state, initial_state = future.get_result()
                 log.debug('received newly-prepared initial state {!r}'.format(initial_state))
                 initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
-                new_state_futures.append(initial_state)
                 self.we_driver.avail_initial_states[initial_state.state_id] = initial_state
+                new_state_futures.append(initial_state)
             else:
                 log.error('unknown future {!r} received from work manager'.format(future))
                 raise AssertionError('untracked future {!r}'.format(future))                    

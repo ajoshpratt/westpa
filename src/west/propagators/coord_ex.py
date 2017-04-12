@@ -35,6 +35,7 @@ from west.propagators import WESTPropagator
 #from westtools import WESTDataReader
 from west.data_manager import WESTDataManager
 import tarfile, StringIO, os, io, cStringIO
+import cPickle
 
 
 def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point):
@@ -70,7 +71,6 @@ def trajectory_input(fieldname, coord_file, segment, single_point):
     with open (coord_file, mode='rb') as file:
         data = numpy.void(file.read())
     segment.data['trajectories/{}'.format(fieldname)] = data
-    #segment.data['trajectories/{}'.format(fieldname)] = numpy.ones((1,))
     #if data.nbytes == 0:
     #    raise ValueError('could not read any coordinate data for {}'.format(fieldname))
 
@@ -79,25 +79,31 @@ def restart_input(fieldname, coord_file, segment, single_point):
     # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
     # It's actually a directory, in this case.
-    d = cStringIO.StringIO()
+    #d = cStringIO.StringIO()
+    d = io.BytesIO()
     t = tarfile.open(mode='w:', fileobj=d)
     #for filename in os.listdir(coord_file):
     t.add(coord_file, arcname='.')
-    #data = numpy.void(d.getvalue())
-    segment.data['trajectories/{}'.format(fieldname)] = numpy.void(d.getvalue())
-    del(d,t)
-    #t.close()
-    #d.close()
+    t.close()
+    segment.data['trajectories/{}'.format(fieldname)] = cPickle.dumps(d.getvalue())
+    d.close()
+    #del(d,t)
+    #assert segment.data['trajectories/{}'.format(fieldname)].nbytes != 0
+    
     #if data.nbytes == 0:
     #    raise ValueError('could not read any coordinate data for {}'.format(fieldname))
 
-def restart_output(tarball, restart):
+def restart_output(tarball, segment):
     # We'll assume it's... for the moment, who cares, just pickle it.
     # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
-    e = io.BytesIO(restart.tobytes())
+
+    e = io.BytesIO(cPickle.loads(segment.restart))
     t = tarfile.open(fileobj=e, mode='r:')
     t.extractall(path=tarball)
+    t.close()
+    e.close()
+        
     del(e,t)
 
 def aux_data_loader(fieldname, data_filename, segment, single_point):
@@ -211,14 +217,14 @@ class ExecutablePropagator(WESTPropagator):
                                     'loader': pcoord_loader,
                                     'enabled': True,
                                     'filename': None}
-        self.data_info['trajectory'] = {'name': 'auxdata/trajectory',
+        self.data_info['trajectory'] = {'name': 'auxdata/trajectories/trajectory',
                                     'loader': trajectory_input,
                                     'enabled': True,
                                     'filename': None}
         # This is for stuff like restart files, etc.  That is, the things we'll need to continue the simulation.
         # For now, tar it, pickle it, and call it a day.
         # Then we untar, unpickle, and go from there.
-        self.data_info['restart'] =  {'name': 'auxdata/restart',
+        self.data_info['restart'] =  {'name': 'auxdata/trajectories/restart',
                                     'loader': restart_input,
                                     'enabled': True,
                                     'filename': None}
@@ -403,7 +409,7 @@ class ExecutablePropagator(WESTPropagator):
         except:
             shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
             os.makedirs(environ['WEST_CURRENT_SEG_DATA_REF'])
-        restart_output(tarball='{}/'.format(environ['WEST_CURRENT_SEG_DATA_REF']), restart=segment.restart)
+        restart_output(tarball='{}/'.format(environ['WEST_CURRENT_SEG_DATA_REF']), segment=segment)
 
     def cleanup_file_system(self, child_info, segment, environ):
         shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
@@ -480,6 +486,14 @@ class ExecutablePropagator(WESTPropagator):
                 os.unlink(prfname)
             except Exception as e:
                 log.warning('could not delete progress coordinate return file {!r}: {}'.format(prfname, e))
+            try:
+                os.unlink(crfname)
+            except Exception as e:
+                log.warning('could not delete progress coordinate return file {!r}: {}'.format(crfname, e))
+            try:
+                shutil.rmtree(erfname)
+            except Exception as e:
+                log.warning('could not delete progress coordinate return file {!r}: {}'.format(erfname, e))
                 
     def gen_istate(self, basis_state, initial_state):
         '''Generate a new initial state from the given basis state.'''
@@ -532,7 +546,6 @@ class ExecutablePropagator(WESTPropagator):
     def propagate(self, segments):
         child_info = self.exe_info['propagator']
         
-        print(len(segments))
         for segment in segments:
             starttime = time.time()
 

@@ -108,6 +108,10 @@ n_iter_dtype = numpy.uint32 # Up to 4 billion iterations
 weight_dtype = numpy.float64  # about 15 digits of precision in weights
 utime_dtype = numpy.float64  # ("u" for Unix time) Up to ~10^300 cpu-seconds 
 vstr_dtype = h5py.new_vlen(str)
+#vvoid_dtype = h5py.new_vlen(numpy.dtype('V'))
+#vvoid_dtype = h5py.new_vlen(numpy.dtype('uint8'))
+#vvoid_dtype = h5py.special_dtype(vlen=numpy.dtype('V')) # Trying to store arbitrary data.  Not working so well...
+vvoid_dtype = h5py.new_vlen(str)
 h5ref_dtype = h5py.special_dtype(ref=h5py.Reference)
 binhash_dtype = numpy.dtype('|S64')
 
@@ -162,6 +166,7 @@ ibstate_index_dtype = numpy.dtype([('iter_valid', numpy.uint),
 bstate_dtype = numpy.dtype( [ ('label', vstr_dtype),            # An optional descriptive label
                               ('probability', weight_dtype),   # Probability that this state will be selected 
                               ('auxref', vstr_dtype),           # An optional auxiliar data reference 
+                              ('restart', vvoid_dtype),           # An optional bit of restart data
                               ])
 
 # Even when initial state generation is off and basis states are passed through directly, an initial state entry
@@ -172,6 +177,7 @@ istate_dtype = numpy.dtype( [('iter_created', numpy.uint),      # Iteration duri
                              ('basis_state_id', seg_id_dtype),    # Which basis state this state was generated from
                              ('istate_type', istate_type_dtype),  # What type this initial state is (generated or basis)
                              ('istate_status', istate_status_dtype), # Whether this initial state is ready to go
+                             ('restart', vvoid_dtype),           # An optional bit of restart data
                              ]) 
 
 tstate_index_dtype = numpy.dtype([('iter_valid', numpy.uint), # Iteration when this state list is valid
@@ -535,7 +541,7 @@ class WESTDataManager:
                 system = westpa.rc.get_system_driver()            
                 state_table = numpy.empty((len(basis_states),), dtype=bstate_dtype)
                 state_pcoords = numpy.empty((len(basis_states),system.pcoord_ndim), dtype=system.pcoord_dtype)
-                restart = []
+                #restart = []
                 # Not sure we need this to start the simulation, actually.
                 for i, state in enumerate(basis_states):
                     state.state_id = i
@@ -544,9 +550,12 @@ class WESTDataManager:
                     state_table[i]['auxref'] = state.auxref or ''
                     state_pcoords[i] = state.pcoord
                     if self.we_h5file_version == 8:
-                        restart.append(state.data['trajectories/restart'])
-                if self.we_h5file_version == 8: 
-                    state_group['bstate_restart'] = restart
+                        #restart.append(state.data['trajectories/restart'])
+                        #state_table[i]['restart'] = numpy.fromstring(state.data['trajectories/restart'])
+                        #state_table[i]['restart'] = numpy.void(state.data['trajectories/restart'])
+                        state_table[i]['restart'] = state.data['trajectories/restart']
+                #if self.we_h5file_version == 8: 
+                #    state_group['bstate_restart'] = restart
                 state_group['bstate_index'] = state_table
                 state_group['bstate_pcoord'] = state_pcoords
             
@@ -622,7 +631,6 @@ class WESTDataManager:
             state_ids = [state.state_id for state in initial_states]
             index_entries = ibstate_group['istate_index'][state_ids] 
             pcoord_vals = numpy.empty((len(initial_states), system.pcoord_ndim), dtype=system.pcoord_dtype)
-            restart = []
             for i, initial_state in enumerate(initial_states):
                 index_entries[i]['iter_created'] = initial_state.iter_created
                 index_entries[i]['iter_used'] = initial_state.iter_used or InitialState.ISTATE_UNUSED
@@ -630,22 +638,8 @@ class WESTDataManager:
                 index_entries[i]['istate_type'] = initial_state.istate_type or InitialState.ISTATE_TYPE_UNSET
                 index_entries[i]['istate_status'] = initial_state.istate_status or InitialState.ISTATE_STATUS_PENDING
                 pcoord_vals[i] = initial_state.pcoord
-                #print(self.we_h5file_version)
                 if self.we_h5file_version == 8:
-                    try:
-                        restart.append(initial_state.data['trajectories/restart'])
-                    except:
-                        # Not sure what's causing this right now.  Just pass.
-                        pass
-            
-            if self.we_h5file_version == 8:
-                try:
-                    # just grow it.  Void datatypes seem a little more difficult to work with, and I'm not strictly sure how best to handle them so far.
-                    restart = list(ibstate_group['istate_restart']) + restart
-                    del ibstate_group['istate_restart']
-                    ibstate_group['istate_restart'] = numpy.array(restart, dtype=numpy.void)
-                except:
-                    ibstate_group['istate_restart'] = numpy.array(restart, dtype=numpy.void)
+                    index_entries[i]['restart'] = initial_state.data['trajectories/restart']
             
             ibstate_group['istate_index'][state_ids] = index_entries
             ibstate_group['istate_pcoord'][state_ids] = pcoord_vals
@@ -725,6 +719,8 @@ class WESTDataManager:
                                                    istate_type = int(row['istate_type']),
                                                    pcoord=pcoord.copy(),
                                                    istate_status=ISTATE_STATUS_PREPARED)
+                        istate.data = {}
+                        istate.data['trajectories/restart'] = row['restart']
                         states.append(istate)
                     del row, pcoord, state_id
                 istart += chunksize
@@ -823,7 +819,7 @@ class WESTDataManager:
                 if self.we_h5file_version == 8:
                     if segment.parent_id < 0:
                         ibstate = self.find_ibstate_group(n_iter)
-                        segment.restart = ibstate['istate_restart'][(segment.parent_id*-1)-1]
+                        segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
                     else:
                         parent_group = self.get_iter_group(n_iter-1)
                         segment.restart = parent_group['auxdata/trajectories/restart'][segment.parent_id]
@@ -1046,12 +1042,13 @@ class WESTDataManager:
                     wtg_parent_ids = all_parent_ids[wtg_offset:wtg_offset+wtg_n_parents]
                     segment.parent_id = long(row['parent_id'])
                 if self.we_h5file_version == 8:
+                    import copy
                     if segment.parent_id >= 0:
                         parent_group = self.get_iter_group(n_iter-1)
                         segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
                     else:
                         ibstate = self.find_ibstate_group(n_iter)
-                        segment.restart = ibstate['istate_restart'][(segment.parent_id*-1)-1]
+                        segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
                 segment.wtg_parent_ids = set(imap(long,wtg_parent_ids))
                 assert len(segment.wtg_parent_ids) == wtg_n_parents
                 segments.append(segment)
