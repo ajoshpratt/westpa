@@ -97,10 +97,18 @@ def restart_input(fieldname, coord_file, segment, single_point):
     d.close()
     #print(segment.data['trajectories/{}'.format(fieldname)])
     e = io.BytesIO(cPickle.loads(str(segment.data['trajectories/{}'.format(fieldname)]).decode('base64')))
-    #with tarfile.open(fileobj=e, mode='r') as t:
+    with tarfile.open(fileobj=e, mode='r') as t:
     #    t.extractall(path='/tmp')
-    #    for file in t.getmembers():
-    #        print(file.name, file.size)
+        for file in t.getmembers():
+            #print(file.name, file.size)
+            if file.name != '.':
+                try:
+                    assert file.size != 0
+                except AssertionError as e:
+                    # It's not forbidden to place an empty file, but it probably means the run has failed.
+                    log.warning('{file.name} has a size of 0; your segment has failed, or the file is empty.  This is likely not the behavior you want.'.format(file=file))
+                    #print(file.name, file.size, e)
+                    #break
     #log.debug('{fieldname} for seg_id {segment.seg_id} successfully loaded in iter {segment.n_iter} .'.format(segment=segment, fieldname=fieldname))
     #d.close()
     #del(d,t)

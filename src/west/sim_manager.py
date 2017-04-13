@@ -200,7 +200,9 @@ class WESimManager:
                    for basis_state in basis_states]
         fmap = {future: i for (i, future) in enumerate(futures)}
         for future in self.work_manager.as_completed(futures): 
-            basis_states[fmap[future]].pcoord = future.get_result().pcoord
+            result = future.get_result()
+            basis_states[fmap[future]].pcoord = result.pcoord
+            basis_states[fmap[future]].data = result.data
         
     def report_basis_states(self, basis_states):
         pstatus = self.rc.pstatus
@@ -275,10 +277,12 @@ class WESimManager:
             for future in work_manager.as_completed(futures):
                 rbstate, ristate = future.get_result()
                 initial_states[ristate.state_id].pcoord = ristate.pcoord
+                initial_states[ristate.state_id].data = ristate.data
         else:
             for initial_state in initial_states:
                 basis_state = initial_state.basis_state
                 initial_state.pcoord = basis_state.pcoord
+                initial_state.data = basis_state.data
                 initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
                 
         for initial_state in initial_states:
@@ -455,7 +459,7 @@ class WESimManager:
                 initial_state.istate_type = InitialState.ISTATE_TYPE_BASIS
                 initial_state.pcoord = basis_state.pcoord.copy()
                 #initial_state.restart = basis_state.restart.copy()
-                initial_state.data = basis_state.copy()
+                initial_state.data = basis_state.data.copy()
                 initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
                 self.we_driver.avail_initial_states[initial_state.state_id] = initial_state
             updated_states.append(initial_state)

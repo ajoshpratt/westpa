@@ -614,7 +614,7 @@ class WESTDataManager:
         for irow, row in enumerate(index_entries):
             row['iter_created'] = n_iter
             row['istate_status'] = InitialState.ISTATE_STATUS_PENDING
-            row['restart'] = ''
+            #row['restart'] = ''
             new_istates.append(InitialState(state_id=first_id+irow, basis_state_id=None,
                                             iter_created=n_iter, istate_status=InitialState.ISTATE_STATUS_PENDING))
         istate_index[first_id:len_index] = index_entries
@@ -643,8 +643,13 @@ class WESTDataManager:
                 index_entries[i]['istate_status'] = initial_state.istate_status or InitialState.ISTATE_STATUS_PENDING
                 pcoord_vals[i] = initial_state.pcoord
                 if self.we_h5file_version == 8:
-                    index_entries[i]['restart'] = initial_state.data['trajectories/restart']
-                    assert index_entries[i]['restart'] == initial_state.data['trajectories/restart']
+                    try:
+                        # It seems this function is called a few times; not sure how best to handle it.
+                    #if initial_state.istate_status != InitialState.ISTATE_STATUS_PENDING:
+                        index_entries[i]['restart'] = initial_state.data['trajectories/restart']
+                        assert index_entries[i]['restart'] == initial_state.data['trajectories/restart']
+                    except:
+                        pass
             
             ibstate_group['istate_index'][state_ids] = index_entries
             ibstate_group['istate_pcoord'][state_ids] = pcoord_vals
