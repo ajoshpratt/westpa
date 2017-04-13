@@ -36,6 +36,8 @@ from west.propagators import WESTPropagator
 from west.data_manager import WESTDataManager
 import tarfile, StringIO, os, io, cStringIO
 import cPickle
+import h5py
+vvoid_dtype = h5py.special_dtype(vlen=str) # Trying to store arbitrary data.  Not working so well...
 
 
 def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point):
@@ -85,19 +87,20 @@ def restart_input(fieldname, coord_file, segment, single_point):
     t = tarfile.open(mode='w:', fileobj=d)
     #with tarfile.open(mode='w', fileobj=d) as t:
     t.add(coord_file, arcname='.')
-    print(segment)
-    for file in t.getmembers():
-        print(file.name, file.size)
+    #print(segment)
+    #for file in t.getmembers():
+    #    print(file.name, file.size)
     import copy
-    segment.data['trajectories/{}'.format(fieldname)] = cPickle.dumps(copy.copy(d.getvalue()), protocol=0).encode('base64')
-    assert segment.data['trajectories/{}'.format(fieldname)] == cPickle.dumps(d.getvalue(), protocol=0).encode('base64')
+    segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps(copy.copy(d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
+    #assert segment.data['trajectories/{}'.format(fieldname)] == cPickle.dumps(d.getvalue(), protocol=0).encode('base64')
     t.close()
     d.close()
-    e = io.BytesIO(cPickle.loads(segment.data['trajectories/{}'.format(fieldname)].decode('base64')))
-    with tarfile.open(fileobj=e, mode='r') as t:
+    #print(segment.data['trajectories/{}'.format(fieldname)])
+    e = io.BytesIO(cPickle.loads(str(segment.data['trajectories/{}'.format(fieldname)]).decode('base64')))
+    #with tarfile.open(fileobj=e, mode='r') as t:
     #    t.extractall(path='/tmp')
-        for file in t.getmembers():
-            print(file.name, file.size)
+    #    for file in t.getmembers():
+    #        print(file.name, file.size)
     #log.debug('{fieldname} for seg_id {segment.seg_id} successfully loaded in iter {segment.n_iter} .'.format(segment=segment, fieldname=fieldname))
     #d.close()
     #del(d,t)
@@ -115,7 +118,23 @@ def restart_output(tarball, segment):
 
     #print(segment)
     #print(segment.data.keys())
-    e = io.BytesIO(cPickle.loads(copy.copy(segment.restart).decode('base64')))
+    import h5py
+    w = h5py.File('/home/judas/nacl_amb/west.h5', 'r')
+    if segment.n_iter > 1 and segment.parent_id >= 0:
+        restart = w['iterations/iter_{:08d}'.format(segment.n_iter-1)]['auxdata/trajectories/restart'][segment.parent_id]
+        assert restart == segment.restart
+        #e = io.BytesIO(cPickle.loads(copy.copy(segment.restart).decode('base64')))
+    else:
+        restart = w['ibstates/0/istate_index']['restart'][(-1*segment.parent_id)-1]
+        assert restart == segment.restart
+    e = io.BytesIO(cPickle.loads(str(segment.restart).decode('base64')))
+    try:
+        e = io.BytesIO(cPickle.loads(str(segment.restart).decode('base64')))
+        #e = io.BytesIO(cPickle.loads(str(segment.restart)).decode('base64'))
+        #e = io.BytesIO(cPickle.loads(copy.copy(segment.restart).decode('base64')))
+    except:
+        print(segment.seg_id)
+        print(segment.restart)
     #print(e.getvalue())
     #e = io.BytesIO()
     #e.write(cPickle.loads(segment.restart))

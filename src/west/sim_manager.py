@@ -458,7 +458,6 @@ class WESimManager:
                 initial_state.data = basis_state.copy()
                 initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
                 self.we_driver.avail_initial_states[initial_state.state_id] = initial_state
-            print(initial_state.data.keys())
             updated_states.append(initial_state)
         self.data_manager.update_initial_states(updated_states, n_iter=self.n_iter+1)
         return futures

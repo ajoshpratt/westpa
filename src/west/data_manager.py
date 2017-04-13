@@ -555,6 +555,7 @@ class WESTDataManager:
                         #state_table[i]['restart'] = numpy.fromstring(state.data['trajectories/restart'])
                         #state_table[i]['restart'] = numpy.void(state.data['trajectories/restart'])
                         state_table[i]['restart'] = state.data['trajectories/restart']
+                        assert state_table[i]['restart'] == state.data['trajectories/restart']
                 #if self.we_h5file_version == 8: 
                 #    state_group['bstate_restart'] = restart
                 state_group['bstate_index'] = state_table
@@ -613,6 +614,7 @@ class WESTDataManager:
         for irow, row in enumerate(index_entries):
             row['iter_created'] = n_iter
             row['istate_status'] = InitialState.ISTATE_STATUS_PENDING
+            row['restart'] = ''
             new_istates.append(InitialState(state_id=first_id+irow, basis_state_id=None,
                                             iter_created=n_iter, istate_status=InitialState.ISTATE_STATUS_PENDING))
         istate_index[first_id:len_index] = index_entries
@@ -630,7 +632,8 @@ class WESTDataManager:
             n_iter = n_iter or self.current_iteration     
             ibstate_group = self.find_ibstate_group(n_iter)
             state_ids = [state.state_id for state in initial_states]
-            index_entries = ibstate_group['istate_index'][state_ids] 
+            import copy
+            index_entries = copy.copy(ibstate_group['istate_index'][state_ids] )
             pcoord_vals = numpy.empty((len(initial_states), system.pcoord_ndim), dtype=system.pcoord_dtype)
             for i, initial_state in enumerate(initial_states):
                 index_entries[i]['iter_created'] = initial_state.iter_created
@@ -641,6 +644,7 @@ class WESTDataManager:
                 pcoord_vals[i] = initial_state.pcoord
                 if self.we_h5file_version == 8:
                     index_entries[i]['restart'] = initial_state.data['trajectories/restart']
+                    assert index_entries[i]['restart'] == initial_state.data['trajectories/restart']
             
             ibstate_group['istate_index'][state_ids] = index_entries
             ibstate_group['istate_pcoord'][state_ids] = pcoord_vals
@@ -681,7 +685,7 @@ class WESTDataManager:
             for state_id, state, pcoord in izip(sorted_istate_ids, istate_rows, istate_pcoords):
                 istate = InitialState(state_id=state_id, basis_state_id=long(state['basis_state_id']),
                                       iter_created=int(state['iter_created']), iter_used=int(state['iter_used']),
-                                      istate_type=int(state['istate_type']), pcoord=pcoord.copy())
+                                      istate_type=int(state['istate_type']), pcoord=pcoord.copy(), data={ 'trajectories/restart': state['restart']})
                 istates.append(istate)
             return istates 
             
@@ -719,9 +723,10 @@ class WESTDataManager:
                                                    iter_created = int(row['iter_created']), iter_used=0,
                                                    istate_type = int(row['istate_type']),
                                                    pcoord=pcoord.copy(),
+                                                   data={'trajectories/restart': row['restart']},
                                                    istate_status=ISTATE_STATUS_PREPARED)
-                        istate.data = {}
-                        istate.data['trajectories/restart'] = row['restart']
+                        #istate.data = {}
+                        #istate.data['trajectories/restart'] = row['restart']
                         states.append(istate)
                     del row, pcoord, state_id
                 istart += chunksize
@@ -820,7 +825,8 @@ class WESTDataManager:
                 if self.we_h5file_version == 8:
                     if segment.parent_id < 0:
                         ibstate = self.find_ibstate_group(n_iter)
-                        segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
+                        import copy
+                        segment.restart = copy.copy(ibstate['istate_index']['restart'][(segment.parent_id*-1)-1])
                     else:
                         parent_group = self.get_iter_group(n_iter-1)
                         import copy
@@ -955,7 +961,7 @@ class WESTDataManager:
                         segment.data[dsname] = data
                         # We don't support datasets with different shapes, it seems.
                         # or maybe we do?
-                        print(data.dtype)
+                        #print(data.dtype)
                         dsets[dsname] = (data.shape, data.dtype)
                       
             # Then we iterate over data sets and store data

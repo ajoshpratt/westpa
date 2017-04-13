@@ -75,7 +75,7 @@ class Segment:
         self.seg_id = long(seg_id) if seg_id is not None else None
         self.status = int(status)  if status is not None else None
         self.parent_id = long(parent_id) if parent_id is not None else None
-        self.restart = restart if restart is not None else None
+        self.restart = str(restart) if restart is not None else None
         self.endpoint_type = int(endpoint_type) if endpoint_type else self.SEG_ENDPOINT_UNSET
         
         self.weight = float(weight) if weight is not None else None
@@ -91,7 +91,8 @@ class Segment:
                % (self.__class__.__name__, hex(id(self)),
                   self.n_iter, self.seg_id, self.weight, self.parent_id, tuple(self.wtg_parent_ids or ()),
                   self.pcoord[0] if self.pcoord is not None else None,
-                  self.pcoord[-1] if self.pcoord is not None else None)
+                  self.pcoord[-1] if self.pcoord is not None else None,
+                  self.restart if self.restart is not None else None)
                
     @property
     def initpoint_type(self):
