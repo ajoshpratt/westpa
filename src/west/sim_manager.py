@@ -473,6 +473,13 @@ class WESimManager:
     def propagate(self):
         segments = self.incomplete_segments.values()
         log.debug('iteration {:d}: propagating {:d} segments'.format(self.n_iter, len(segments)))
+        # Dereference restart data
+        for seg in segments:
+            try:
+                seg.restart = self.data_manager.we_h5file[seg.restart]['trajectories/restart'][seg.parent_id]
+            except:
+                # From an istate
+                pass
         
         # all futures dispatched for this iteration
         futures = set()        
@@ -508,6 +515,7 @@ class WESimManager:
                 for segment in incoming:
                     result_futures.add(segment)
                     # We don't want to send this on, actually.  Kill it.
+                    del(segment.restart)
 
                 self.segments.update({segment.seg_id: segment for segment in incoming})
                 self.completed_segments.update({segment.seg_id: segment for segment in incoming})

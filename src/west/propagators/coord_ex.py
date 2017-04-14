@@ -124,21 +124,10 @@ def restart_output(tarball, segment):
     #print(segment.data.keys())
     #import h5py
     #h5file = h5py.File('/home/judas/kcrown_example/west.h5', 'r')
-    try:
-        e = io.BytesIO(cPickle.loads(str(segment.restart).decode('base64')))
-    except:
-        try:
-            restart = str(segment.ref_function(segment.restart)[...]['restart'][0]).decode('base64')
-        except:
-            #restart = str(h5file[segment.restart][...][0]).decode('base64')
-            # Trying to do this via reference, but it's not going easily.
-            #restart = str(h5file[segment.restart][...][segment.parent_id]).decode('base64')
-            # Seems to just... return shit?
-            restart = str(segment.ref_function(segment.restart)['iterations/iter_{:08d}/auxdata/trajectories/restart'.format(segment.n_iter-1)][...][segment.parent_id]).decode('base64')
-        e = io.BytesIO(cPickle.loads(restart))
+    e = io.BytesIO(cPickle.loads(str(segment.restart).decode('base64')))
     with tarfile.open(fileobj=e, mode='r:') as t:
         t.extractall(path=tarball)
-    del(segment.restart)
+    #del(segment.restart)
     log.debug('Restart for seg_id {segment.seg_id} successfully untarred in iter {segment.n_iter} .'.format(segment=segment))
     e.close()
     #t.close()

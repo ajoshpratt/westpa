@@ -647,7 +647,7 @@ class WESTDataManager:
                     #if initial_state.istate_status != InitialState.ISTATE_STATUS_PENDING:
                         index_entries[i]['restart'] = initial_state.data['trajectories/restart']
                         #assert index_entries[i]['restart'] == initial_state.data['trajectories/restart']
-                        del(initial_state.data)
+                        #del(initial_state.data)
                     except:
                         pass
             
@@ -839,9 +839,12 @@ class WESTDataManager:
                 if self.we_h5file_version == 8:
                     if segment.parent_id >= 0:
                         parent_group = self.get_iter_group(n_iter-1)
-                        segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
+                        #segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
                         #segment.restart = parent_group['auxdata/trajectories'].regionref[segment.parent_id]
                         #segment.restart = parent_group['auxdata/trajectories'].ref
+                        segment.restart = parent_group['auxdata'].ref
+                        #segment.we_h5filename = self.we_h5filename
+                        #segment.ref_function = _read_only_ref_return_
                         #segment.h5file = self.we_h5file
                         #segment.ref_function = self._read_only_ref_return_
                     else:
@@ -1011,10 +1014,10 @@ class WESTDataManager:
                             dest_sel.select_hyperslab((segment.seg_id,)+(0,)*source_rank, (1,)+auxdataset.shape)
                             dset.id.write(source_sel, dest_sel, auxdataset)                                
                         #if 'delram' in dsopts.keys():
-                        del(auxdataset)
-                        del(segment.data[dsname])
-            	    #if 'delram' in dsopts.keys():
-                        #del dsets[dsname]
+                        #del(auxdataset)
+                        #del(segment.data[dsname])
+            	    if 'delram' in dsopts.keys():
+                        del dsets[dsname]
     
     def get_segments(self, n_iter=None, seg_ids=None, load_pcoords = True):
         '''Return the given (or all) segments from a given iteration.  
@@ -1077,10 +1080,12 @@ class WESTDataManager:
                 if self.we_h5file_version == 8:
                     if segment.parent_id >= 0:
                         parent_group = self.get_iter_group(n_iter-1)
-                        segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
+                        #segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
+                        segment.restart = parent_group['auxdata'].ref
                         #segment.restart = parent_group['auxdata/trajectories/restart'].ref
                         #segment.restart = parent_group['auxdata/trajectories'].ref
-                        #segment.ref_function = self._read_only_ref_return_
+                        #segment.ref_function = _read_only_ref_return_
+                        #segment.we_h5filename = self.we_h5filename
                         #self.h5file = self.we_h5file
                         #segment.h5file = self.we_h5file
                     else:
@@ -1609,3 +1614,6 @@ def calc_chunksize(shape, dtype, max_chunksize=262144):
     log.debug('selected chunk shape {} for data set of type {} shaped {} (chunk size = {} bytes)'
               .format(chunk_shape, dtype, shape, chunk_nbytes))
     return chunk_shape
+
+def _read_only_ref_return_(ref, we_h5file):
+    return we_h5file[ref]
