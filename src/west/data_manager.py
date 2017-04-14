@@ -466,6 +466,9 @@ class WESTDataManager:
                 master_index_row['group_ref'] = None 
                 
             master_index[set_id] = master_index_row
+
+    def _read_only_ref_return_(self, ref):
+        return self.we_h5file[ref]
             
     def _find_multi_iter_group(self, n_iter, master_group_name):
         with self.lock:
@@ -552,13 +555,9 @@ class WESTDataManager:
                     state_table[i]['auxref'] = state.auxref or ''
                     state_pcoords[i] = state.pcoord
                     if self.we_h5file_version == 8:
-                        #restart.append(state.data['trajectories/restart'])
-                        #state_table[i]['restart'] = numpy.fromstring(state.data['trajectories/restart'])
-                        #state_table[i]['restart'] = numpy.void(state.data['trajectories/restart'])
                         state_table[i]['restart'] = state.data['trajectories/restart']
-                        assert state_table[i]['restart'] == state.data['trajectories/restart']
-                #if self.we_h5file_version == 8: 
-                #    state_group['bstate_restart'] = restart
+                        #assert state_table[i]['restart'] == state.data['trajectories/restart']
+                        #del(state.data)
                 state_group['bstate_index'] = state_table
                 state_group['bstate_pcoord'] = state_pcoords
             
@@ -615,7 +614,6 @@ class WESTDataManager:
         for irow, row in enumerate(index_entries):
             row['iter_created'] = n_iter
             row['istate_status'] = InitialState.ISTATE_STATUS_PENDING
-            #row['restart'] = ''
             new_istates.append(InitialState(state_id=first_id+irow, basis_state_id=None,
                                             iter_created=n_iter, istate_status=InitialState.ISTATE_STATUS_PENDING))
         istate_index[first_id:len_index] = index_entries
@@ -633,8 +631,7 @@ class WESTDataManager:
             n_iter = n_iter or self.current_iteration     
             ibstate_group = self.find_ibstate_group(n_iter)
             state_ids = [state.state_id for state in initial_states]
-            import copy
-            index_entries = copy.copy(ibstate_group['istate_index'][state_ids] )
+            index_entries = (ibstate_group['istate_index'][state_ids] )
             pcoord_vals = numpy.empty((len(initial_states), system.pcoord_ndim), dtype=system.pcoord_dtype)
             for i, initial_state in enumerate(initial_states):
                 index_entries[i]['iter_created'] = initial_state.iter_created
@@ -648,7 +645,8 @@ class WESTDataManager:
                         # It seems this function is called a few times; not sure how best to handle it.
                     #if initial_state.istate_status != InitialState.ISTATE_STATUS_PENDING:
                         index_entries[i]['restart'] = initial_state.data['trajectories/restart']
-                        assert index_entries[i]['restart'] == initial_state.data['trajectories/restart']
+                        #assert index_entries[i]['restart'] == initial_state.data['trajectories/restart']
+                        del(initial_state.data)
                     except:
                         pass
             
@@ -828,15 +826,27 @@ class WESTDataManager:
                         pcoord[seg_id,...] = segment.pcoord
                 #try:
                 # THIS IS THE LINE.  We need to pass the information HERE.
+                #if self.we_h5file_version == 8:
+                #    if segment.parent_id < 0:
+                #        ibstate = self.find_ibstate_group(n_iter)
+                #        segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
+                #        segment.h5file = self.we_h5file
+                #    else:
+                #        parent_group = self.get_iter_group(n_iter-1)
+                #        segment.restart = parent_group['auxdata/trajectories/restart'][segment.parent_id]
+                #        segment.h5file = self.we_h5file
                 if self.we_h5file_version == 8:
-                    if segment.parent_id < 0:
-                        ibstate = self.find_ibstate_group(n_iter)
-                        import copy
-                        segment.restart = copy.copy(ibstate['istate_index']['restart'][(segment.parent_id*-1)-1])
-                    else:
+                    if segment.parent_id >= 0:
                         parent_group = self.get_iter_group(n_iter-1)
-                        import copy
-                        segment.restart = copy.copy(parent_group['auxdata/trajectories/restart'][segment.parent_id])
+                        #segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
+                        #segment.restart = parent_group['auxdata/trajectories'].regionref[segment.parent_id]
+                        segment.restart = parent_group['auxdata/trajectories'].ref
+                        segment.ref_function = self._read_only_ref_return_
+                    else:
+                        ibstate = self.find_ibstate_group(n_iter)
+                        segment.restart = ibstate['istate_index'].regionref[(segment.parent_id*-1)-1]
+                        segment.ref_function = self._read_only_ref_return_
+                        #segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
                     
                         
             if total_parents > 0:
@@ -1062,13 +1072,18 @@ class WESTDataManager:
                     wtg_parent_ids = all_parent_ids[wtg_offset:wtg_offset+wtg_n_parents]
                     segment.parent_id = long(row['parent_id'])
                 if self.we_h5file_version == 8:
-                    import copy
                     if segment.parent_id >= 0:
                         parent_group = self.get_iter_group(n_iter-1)
-                        segment.restart = copy.copy(parent_group['auxdata/trajectories']['restart'][segment.parent_id])
+                        #segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
+                        #segment.restart = parent_group['auxdata/trajectories/restart'].ref
+                        segment.restart = parent_group['auxdata/trajectories'].ref
+                        segment.ref_function = self._read_only_ref_return_
+                        self.h5file = self.we_h5file
                     else:
                         ibstate = self.find_ibstate_group(n_iter)
-                        segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
+                        segment.restart = ibstate['istate_index'].regionref[(segment.parent_id*-1)-1]
+                        segment.ref_function = self._read_only_ref_return_
+                        #segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
                 segment.wtg_parent_ids = set(imap(long,wtg_parent_ids))
                 assert len(segment.wtg_parent_ids) == wtg_n_parents
                 segments.append(segment)

@@ -278,6 +278,8 @@ class WESimManager:
                 rbstate, ristate = future.get_result()
                 initial_states[ristate.state_id].pcoord = ristate.pcoord
                 initial_states[ristate.state_id].data = ristate.data
+                # IF GEN_ISTATES doesn't work, this is probably why.
+                #del (ristate.data)
         else:
             for initial_state in initial_states:
                 basis_state = initial_state.basis_state
@@ -378,6 +380,7 @@ class WESimManager:
                                                                                      len(segments)))
         
         # Get the initial states active for this iteration (so that the propagator has them if necessary)
+        # With restart data, this is possibly a very memory intensive call.  But this isn't killing it...
         self.current_iter_istates = {state.state_id: state for state in 
                                      self.data_manager.get_segment_initial_states(segments.values())}
         log.debug('This iteration uses {:d} initial states'.format(len(self.current_iter_istates)))
@@ -459,7 +462,8 @@ class WESimManager:
                 initial_state.istate_type = InitialState.ISTATE_TYPE_BASIS
                 initial_state.pcoord = basis_state.pcoord.copy()
                 #initial_state.restart = basis_state.restart.copy()
-                initial_state.data = basis_state.data.copy()
+                # Don't copy.
+                initial_state.data = basis_state.data
                 initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
                 self.we_driver.avail_initial_states[initial_state.state_id] = initial_state
             updated_states.append(initial_state)
@@ -549,8 +553,8 @@ class WESimManager:
         log.debug('done with propagation')
         self.save_bin_data()
         self.data_manager.flush_backing()
-        if self.data_manager.aux_h5file != None:
-            self.data_manager.aux_h5file.close()
+        #if self.data_manager.aux_h5file != None:
+        #    self.data_manager.aux_h5file.close()
         
     def save_bin_data(self):
         '''Calculate and write flux and transition count matrices to HDF5. Population and rate matrices 

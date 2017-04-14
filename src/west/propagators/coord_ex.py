@@ -73,6 +73,7 @@ def trajectory_input(fieldname, coord_file, segment, single_point):
     with open (coord_file, mode='rb') as file:
         data = numpy.void(file.read())
     segment.data['trajectories/{}'.format(fieldname)] = data
+    del(data)
     #if data.nbytes == 0:
     #    raise ValueError('could not read any coordinate data for {}'.format(fieldname))
 
@@ -90,11 +91,9 @@ def restart_input(fieldname, coord_file, segment, single_point):
     #print(segment)
     #for file in t.getmembers():
     #    print(file.name, file.size)
-    import copy
-    segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps(copy.copy(d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
+    segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps((d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
     t.close()
     d.close()
-    e = io.BytesIO(cPickle.loads(str(segment.data['trajectories/{}'.format(fieldname)]).decode('base64')))
     del(d,t)
     #with tarfile.open(fileobj=e, mode='r') as t:
     #    t.extractall(path='/tmp')
@@ -123,8 +122,21 @@ def restart_output(tarball, segment):
 
     #print(segment)
     #print(segment.data.keys())
-    e = io.BytesIO(cPickle.loads(str(segment.restart).decode('base64')))
-    with tarfile.open(fileobj=e, mode='r') as t:
+    #import h5py
+    #h5file = h5py.File('/home/judas/kcrown_example/west.h5', 'r')
+    try:
+        e = io.BytesIO(cPickle.loads(str(segment.restart).decode('base64')))
+    except:
+        try:
+            restart = str(segment.ref_function(segment.restart)[...]['restart'][0]).decode('base64')
+        except:
+            #restart = str(h5file[segment.restart][...][0]).decode('base64')
+            # Trying to do this via reference, but it's not going easily.
+            #restart = str(h5file[segment.restart][...][segment.parent_id]).decode('base64')
+            # Seems to just... return shit?
+            restart = str(segment.ref_function(segment.restart)['iterations/iter_{:08d}/auxdata/trajectories/restart'.format(segment.n_iter-1)][...][segment.parent_id]).decode('base64')
+        e = io.BytesIO(cPickle.loads(restart))
+    with tarfile.open(fileobj=e, mode='r:') as t:
         t.extractall(path=tarball)
     log.debug('Restart for seg_id {segment.seg_id} successfully untarred in iter {segment.n_iter} .'.format(segment=segment))
     e.close()
