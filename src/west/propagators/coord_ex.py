@@ -138,6 +138,7 @@ def restart_output(tarball, segment):
         e = io.BytesIO(cPickle.loads(restart))
     with tarfile.open(fileobj=e, mode='r:') as t:
         t.extractall(path=tarball)
+    del(segment.restart)
     log.debug('Restart for seg_id {segment.seg_id} successfully untarred in iter {segment.n_iter} .'.format(segment=segment))
     e.close()
     #t.close()

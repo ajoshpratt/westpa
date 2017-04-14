@@ -43,6 +43,7 @@ evolves.
 Version history:
     Version 8
         - Added in support for 'restart' and 'trajectory' information.
+        - restart information should be passed as references, not actual data.
     Version 7
         - Removed bin_assignments, bin_populations, and bin_rates from iteration group.
         - Added new_segments subgroup to iteration group
@@ -838,15 +839,17 @@ class WESTDataManager:
                 if self.we_h5file_version == 8:
                     if segment.parent_id >= 0:
                         parent_group = self.get_iter_group(n_iter-1)
-                        #segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
+                        segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
                         #segment.restart = parent_group['auxdata/trajectories'].regionref[segment.parent_id]
-                        segment.restart = parent_group['auxdata/trajectories'].ref
-                        segment.ref_function = self._read_only_ref_return_
+                        #segment.restart = parent_group['auxdata/trajectories'].ref
+                        #segment.h5file = self.we_h5file
+                        #segment.ref_function = self._read_only_ref_return_
                     else:
                         ibstate = self.find_ibstate_group(n_iter)
-                        segment.restart = ibstate['istate_index'].regionref[(segment.parent_id*-1)-1]
-                        segment.ref_function = self._read_only_ref_return_
-                        #segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
+                        #segment.restart = ibstate['istate_index'].regionref[(segment.parent_id*-1)-1]
+                        #segment.h5file = self.we_h5file
+                        #segment.ref_function = self._read_only_ref_return_
+                        segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
                     
                         
             if total_parents > 0:
@@ -1074,16 +1077,19 @@ class WESTDataManager:
                 if self.we_h5file_version == 8:
                     if segment.parent_id >= 0:
                         parent_group = self.get_iter_group(n_iter-1)
-                        #segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
+                        segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
                         #segment.restart = parent_group['auxdata/trajectories/restart'].ref
-                        segment.restart = parent_group['auxdata/trajectories'].ref
-                        segment.ref_function = self._read_only_ref_return_
-                        self.h5file = self.we_h5file
+                        #segment.restart = parent_group['auxdata/trajectories'].ref
+                        #segment.ref_function = self._read_only_ref_return_
+                        #self.h5file = self.we_h5file
+                        #segment.h5file = self.we_h5file
                     else:
                         ibstate = self.find_ibstate_group(n_iter)
-                        segment.restart = ibstate['istate_index'].regionref[(segment.parent_id*-1)-1]
-                        segment.ref_function = self._read_only_ref_return_
-                        #segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
+                        #segment.restart = ibstate['istate_index'].regionref[(segment.parent_id*-1)-1]
+                        #segment.h5filename = self.h5_file_name
+                        #segment.ref_function = self._read_only_ref_return_
+                        #segment.h5file = self.we_h5file
+                        segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
                 segment.wtg_parent_ids = set(imap(long,wtg_parent_ids))
                 assert len(segment.wtg_parent_ids) == wtg_n_parents
                 segments.append(segment)
