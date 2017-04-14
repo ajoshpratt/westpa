@@ -166,6 +166,24 @@ class WorkManager:
         watcher.wait()
         completed = watcher.reset()
         return completed.pop()        
+
+    def wait_any_return_done(self, futures):
+        '''Wait on any of the given ``futures`` and return the first one which has a result available.
+        If more than one result is or becomes available simultaneously, any completed future may be returned.'''
+        pending = set(futures)
+        with WMFuture.all_acquired(pending):
+            completed = {future for future in futures if future.done}
+            
+            if completed:
+                # If any futures are complete, then we don't need to do anything else
+                return completed
+            else:
+                # Otherwise, we need to install a watcher
+                watcher = FutureWatcher(futures, threshold = 1)
+        
+        watcher.wait()
+        completed = watcher.reset()
+        return completed      
             
     def wait_all(self, futures):
         '''A convenience function which waits on all the given ``futures`` in order.  This function returns
