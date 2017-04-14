@@ -271,6 +271,7 @@ class WESTDataManager:
         self.aux_compression_threshold = self.default_aux_compression_threshold
         
         self.we_h5file = None
+        self.aux_h5file = None
         
         self.lock = threading.RLock()
         self.flush_period = None
@@ -996,8 +997,11 @@ class WESTDataManager:
                             dest_sel = dset.id.get_space()
                             dest_sel.select_hyperslab((segment.seg_id,)+(0,)*source_rank, (1,)+auxdataset.shape)
                             dset.id.write(source_sel, dest_sel, auxdataset)                                
-            	    if 'delram' in dsopts.keys():
-                        del dsets[dsname]
+                        #if 'delram' in dsopts.keys():
+                        del(auxdataset)
+                        del(segment.data[dsname])
+            	    #if 'delram' in dsopts.keys():
+                        #del dsets[dsname]
     
     def get_segments(self, n_iter=None, seg_ids=None, load_pcoords = True):
         '''Return the given (or all) segments from a given iteration.  

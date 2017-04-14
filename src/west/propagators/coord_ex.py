@@ -92,26 +92,24 @@ def restart_input(fieldname, coord_file, segment, single_point):
     #    print(file.name, file.size)
     import copy
     segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps(copy.copy(d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
-    #assert segment.data['trajectories/{}'.format(fieldname)] == cPickle.dumps(d.getvalue(), protocol=0).encode('base64')
     t.close()
     d.close()
-    #print(segment.data['trajectories/{}'.format(fieldname)])
     e = io.BytesIO(cPickle.loads(str(segment.data['trajectories/{}'.format(fieldname)]).decode('base64')))
-    with tarfile.open(fileobj=e, mode='r') as t:
+    del(d,t)
+    #with tarfile.open(fileobj=e, mode='r') as t:
     #    t.extractall(path='/tmp')
-        for file in t.getmembers():
+    #    for file in t.getmembers():
             #print(file.name, file.size)
-            if file.name != '.':
-                try:
-                    assert file.size != 0
-                except AssertionError as e:
+    #        if file.name != '.':
+    #            try:
+    #                assert file.size != 0
                     # It's not forbidden to place an empty file, but it probably means the run has failed.
-                    log.warning('{file.name} has a size of 0; your segment has failed, or the file is empty.  This is likely not the behavior you want.'.format(file=file))
+    #                log.warning('{file.name} has a size of 0; your segment has failed, or the file is empty.  This is likely not the behavior you want.'.format(file=file))
                     #print(file.name, file.size, e)
                     #break
+
     #log.debug('{fieldname} for seg_id {segment.seg_id} successfully loaded in iter {segment.n_iter} .'.format(segment=segment, fieldname=fieldname))
     #d.close()
-    #del(d,t)
     #assert segment.data['trajectories/{}'.format(fieldname)].nbytes != 0
     #print(cPickle.loads(segment.data['trajectories/{}'.format(fieldname)]))
     
@@ -122,33 +120,10 @@ def restart_output(tarball, segment):
     # We'll assume it's... for the moment, who cares, just pickle it.
     # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
-    import copy
 
     #print(segment)
     #print(segment.data.keys())
-    import h5py
-    w = h5py.File('/home/judas/nacl_amb/west.h5', 'r')
-    if segment.n_iter > 1 and segment.parent_id >= 0:
-        restart = w['iterations/iter_{:08d}'.format(segment.n_iter-1)]['auxdata/trajectories/restart'][segment.parent_id]
-        assert restart == segment.restart
-        #e = io.BytesIO(cPickle.loads(copy.copy(segment.restart).decode('base64')))
-    else:
-        restart = w['ibstates/0/istate_index']['restart'][(-1*segment.parent_id)-1]
-        assert restart == segment.restart
     e = io.BytesIO(cPickle.loads(str(segment.restart).decode('base64')))
-    try:
-        e = io.BytesIO(cPickle.loads(str(segment.restart).decode('base64')))
-        #e = io.BytesIO(cPickle.loads(str(segment.restart)).decode('base64'))
-        #e = io.BytesIO(cPickle.loads(copy.copy(segment.restart).decode('base64')))
-    except:
-        print(segment.seg_id)
-        print(segment.restart)
-    #print(e.getvalue())
-    #e = io.BytesIO()
-    #e.write(cPickle.loads(segment.restart))
-    #e.close()
-    #e = cStringIO.StringIO(cPickle.loads(copy.copy(segment.restart)))
-    #t = tarfile.open(fileobj=e, mode='r:')
     with tarfile.open(fileobj=e, mode='r') as t:
         t.extractall(path=tarball)
     log.debug('Restart for seg_id {segment.seg_id} successfully untarred in iter {segment.n_iter} .'.format(segment=segment))
@@ -156,7 +131,7 @@ def restart_output(tarball, segment):
     #t.close()
     #e.close()
         
-    #del(e,t)
+    del(e,t)
 
 def aux_data_loader(fieldname, data_filename, segment, single_point):
     data = numpy.loadtxt(data_filename)
@@ -271,6 +246,7 @@ class ExecutablePropagator(WESTPropagator):
                                     'filename': None}
         self.data_info['trajectory'] = {'name': 'auxdata/trajectories/trajectory',
                                     'loader': trajectory_input,
+                                    'delram': True,
                                     'enabled': True,
                                     'filename': None}
         # This is for stuff like restart files, etc.  That is, the things we'll need to continue the simulation.
@@ -279,6 +255,7 @@ class ExecutablePropagator(WESTPropagator):
         import h5py
         self.data_info['restart'] =  {'name': 'auxdata/trajectories/restart',
                                     'loader': restart_input,
+                                    'delram': True,
                                     'enabled': True,
                                     'filename': None,
                                     'dtype': h5py.new_vlen(str)}

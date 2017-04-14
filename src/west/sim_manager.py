@@ -488,8 +488,8 @@ class WESimManager:
             segment_futures.add(future)
         
         # Since we're storing trajectories, this is now slow slow sloooooow.
-        result_futures = []
-        new_state_futures = []
+        result_futures = set()
+        new_state_futures = set()
         while futures:
             # TODO: add capacity for timeout or SIGINT here
             future = self.work_manager.wait_any(futures)
@@ -501,6 +501,10 @@ class WESimManager:
                 incoming = future.get_result()
                 self.n_propagated += 1
                 
+                for segment in incoming:
+                    result_futures.add(segment)
+                    # We don't want to send this on, actually.  Kill it.
+
                 self.segments.update({segment.seg_id: segment for segment in incoming})
                 self.completed_segments.update({segment.seg_id: segment for segment in incoming})
                 
@@ -508,7 +512,7 @@ class WESimManager:
                 new_istate_futures = self.get_istate_futures()
                 istate_gen_futures.update(new_istate_futures)
                 futures.update(new_istate_futures)
-                result_futures.append(incoming)
+
                 
             elif future in istate_gen_futures:
                 istate_gen_futures.remove(future)
@@ -516,25 +520,28 @@ class WESimManager:
                 log.debug('received newly-prepared initial state {!r}'.format(initial_state))
                 initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
                 self.we_driver.avail_initial_states[initial_state.state_id] = initial_state
-                new_state_futures.append(initial_state)
+                new_state_futures.add(initial_state)
             else:
                 log.error('unknown future {!r} received from work manager'.format(future))
                 raise AssertionError('untracked future {!r}'.format(future))                    
 
+            import gc
             if len(result_futures) >= self.propagator_block_size:
                 with self.data_manager.expiring_flushing_lock():                        
                     self.data_manager.update_segments(self.n_iter, result_futures)
-                    result_futures = []
+                    result_futures = set()
+                    gc.collect()
                 #result_futures = self.work_manager.submit(self.data_manager.update_segments, args=(self.n_iter, incoming))
             if len(new_state_futures) >= self.propagator_block_size:
                 with self.data_manager.expiring_flushing_lock():
                     self.data_manager.update_initial_states(new_state_futures, n_iter=self.n_iter+1)
-                    new_state_futures = []
+                    new_state_futures = set()
 
 
         if len(result_futures) > 0:
             with self.data_manager.expiring_flushing_lock():                        
-                self.data_manager.update_segments(self.n_iter, incoming)
+                self.data_manager.update_segments(self.n_iter, result_futures)
+                gc.collect()
         if len(new_state_futures) > 0:
             with self.data_manager.expiring_flushing_lock():
                 self.data_manager.update_initial_states(new_state_futures, n_iter=self.n_iter+1)
@@ -542,6 +549,8 @@ class WESimManager:
         log.debug('done with propagation')
         self.save_bin_data()
         self.data_manager.flush_backing()
+        if self.data_manager.aux_h5file != None:
+            self.data_manager.aux_h5file.close()
         
     def save_bin_data(self):
         '''Calculate and write flux and transition count matrices to HDF5. Population and rate matrices 
