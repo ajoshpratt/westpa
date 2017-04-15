@@ -45,6 +45,14 @@ def size_format(filesize, n=0):
         btype = 'MB'
     if n == 3:
         btype = 'GB'
+    if n == 4:
+        btype = 'TB'
+    if n == 4:
+        btype = 'PB'
+    if n == 5:
+        # In 2017, this would be considered an excessive amount of data to store per iteration.  Hello, future people.
+        # No real point in calling the function again.
+        return str('{:.2f} {}'.format(filesize*1024, btype='PB'))
     if filesize < 1024:
         return str('{:.2f} {}'.format(filesize, btype))
     if filesize > 1024:

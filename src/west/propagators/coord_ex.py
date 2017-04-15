@@ -40,7 +40,7 @@ import h5py
 vvoid_dtype = h5py.special_dtype(vlen=str) # Trying to store arbitrary data.  Not working so well...
 
 
-def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point):
+def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point, **kwargs):
     """Read progress coordinate data into the ``pcoord`` field on ``destobj``. 
     An exception will be raised if the data is malformed.  If ``single_point`` is true,
     then only one (N-dimensional) point will be read, otherwise system.pcoord_len points
@@ -85,6 +85,7 @@ def size_format(filesize, n=0):
     if n == 2:
         btype = 'MB'
     if n == 3:
+        # Your restart data shouldn't be anywhere near this size in 2017.
         btype = 'GB'
     if filesize < 1024:
         return str('{:.2f} {}'.format(filesize, btype))
@@ -105,19 +106,19 @@ def restart_input(fieldname, coord_file, segment, single_point):
     try:
         # Just for convenient formatting of basis/istates.
         segment.seg_id = segment.state_id
-        segment.n_iter = 'prep'
+        segment.n_iter = 'PREP'
     except:
         pass
     if tarsize > itarsize:
         log.warning('{fieldname} has a filesize of {tarsize}; this may result in RAM intensive WESTPA runs.'.format(fieldname=fieldname,tarsize=size_format(tarsize)))
     segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps((d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
-    if segment.data['trajectories/{}'.format(fieldname)].nbytes == 0:
-        log.warning('could not read any restart data for {}.  Disable restarts in your config file to remove this warning.'.format(fieldname))
+    if len(t.getmembers()) <= 1:
+        log.warning('You have not supplied any {} data.  Disable restarts in your config file to remove this warning.'.format(fieldname))
     t.close()
     d.close()
     del(d,t)
     log.debug('{fieldname} with size {tarsize} for seg_id {segment.seg_id} successfully loaded in iter {segment.n_iter}.'.format(segment=segment, fieldname=fieldname, tarsize=tarsize))
-    # We could enable some sort of debug for the prop.
+    # We could enable some sort of debug for the prop, but this likely results in excessive memory usage during normal runs.
     #with tarfile.open(fileobj=e, mode='r') as t:
     #    for file in t.getmembers():
     #        if file.name != '.':
@@ -527,11 +528,7 @@ class ExecutablePropagator(WESTPropagator):
             eloader = self.data_info['restart']['loader']
             eloader('restart', erfname, state, single_point = True)
             ploader = self.data_info['pcoord']['loader']
-            try:
-                ploader('pcoord', prfname, state, single_point = True, restart_dir=erfname, rundir=None)
-            except:
-                # Assume old style pcoord loader.
-                ploader('pcoord', prfname, state, single_point = True)
+            ploader('pcoord', prfname, state, single_point = True, trajectory=crfname, restart=erfname)
         finally:
             try:
                 os.unlink(prfname)
@@ -662,27 +659,39 @@ class ExecutablePropagator(WESTPropagator):
                 loader = self.data_info[dataset]['loader']
                 segment.file_type = self.trajectory_types
                 try:
-                    loader(dataset, filename, segment, single_point=False)
+                    if dataset == 'pcoord':
+                        # Yes, I'm considering changing the default behavior.  It's faster to just supply the files directly on disk during propagation,
+                        # rather than re-creating temp files just to have it work for a custom pcoord load function.  Really, we just need to make sure
+                        # that the pcoord loaders accept *kwargs; nothing else should be necessary.
+                        loader(dataset, filename, segment, single_point=False, trajectory=return_files['trajectory'], restart=return_files['restart'])
+                    else:
+                        loader(dataset, filename, segment, single_point=False)
                 except Exception as e:
                     log.error('could not read {} from {!r}: {!r}'.format(dataset, filename, e))
                     segment.status = Segment.SEG_STATUS_FAILED 
                     break
-                else:
-                    if del_return_files[dataset]:
-                        if dataset == 'restart':
-                            try:
-                                shutil.rmtree(filename)
-                            except Exception as e:
-                                log.warning('could not delete {} file {!r}: {!r}'.format(dataset, filename, e))
-                            else:
-                                log.debug('deleted {} directory {!r}'.format(dataset, filename))    
+
+            # Why are we deleting the dataset AFTER we load it?  We want to expose the trajectory and restart information to the
+            # pcoord loader, if applicable.
+            for dataset in reversed(self.data_info):
+                if not self.data_info[dataset].get('enabled',False):
+                    continue
+                filename = return_files[dataset]
+                if del_return_files[dataset]:
+                    if dataset == 'restart':
+                        try:
+                            shutil.rmtree(filename)
+                        except Exception as e:
+                            log.warning('could not delete {} file {!r}: {!r}'.format(dataset, filename, e))
                         else:
-                            try:
-                                os.unlink(filename)
-                            except Exception as e:
-                                log.warning('could not delete {} file {!r}: {!r}'.format(dataset, filename, e))
-                            else:
-                                log.debug('deleted {} file {!r}'.format(dataset, filename))    
+                            log.debug('deleted {} directory {!r}'.format(dataset, filename))    
+                    else:
+                        try:
+                            os.unlink(filename)
+                        except Exception as e:
+                            log.warning('could not delete {} file {!r}: {!r}'.format(dataset, filename, e))
+                        else:
+                            log.debug('deleted {} file {!r}'.format(dataset, filename))    
             if segment.status == Segment.SEG_STATUS_FAILED:
                 continue
                                         
