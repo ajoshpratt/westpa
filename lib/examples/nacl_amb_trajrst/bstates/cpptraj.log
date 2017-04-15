@@ -1,0 +1,16 @@
+# 04/07/17 20:00:02
+# ../amber_config/nacl.prm
+# Loaded topologies:
+#   ../amber_config/nacl.prm
+trajin nacl.crd
+trajout nacl.cdf
+trajout nacl.netcdf
+go
+# 04/07/17 20:02:13
+# ../amber_config/nacl.prm
+# Loaded topologies:
+#   ../amber_config/nacl.prm
+trajin nacl.crd
+trajout nacl.nc
+go
+quit
