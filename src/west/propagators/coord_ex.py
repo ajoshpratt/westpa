@@ -454,8 +454,8 @@ class ExecutablePropagator(WESTPropagator):
         restart_output(tarball='{}/'.format(environ['WEST_CURRENT_SEG_DATA_REF']), segment=segment)
 
     def cleanup_file_system(self, child_info, segment, environ):
-        #shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
-        pass
+        shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
+        #pass
         #return 0
             
     def exec_for_iteration(self, child_info, n_iter, addtl_env = None):
