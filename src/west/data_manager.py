@@ -209,6 +209,7 @@ class WESTDataManager:
     default_we_h5file_driver   = None
     default_flush_period = 60
     default_data_refs          = '$WEST_SIM_ROOT/trajectories/{segment.n_iter:06d}.h5'
+    default_store_external_aux = False
     
     # Compress any auxiliary dataset whose total size (across all segments) is more than 1MB
     default_aux_compression_threshold = 1048576
@@ -245,7 +246,9 @@ class WESTDataManager:
         # We'll probably want to fancy this up later, but for now, it should work.
 
         self.data_refs = config.get_path(['west', 'data', 'data_refs', 'trajectories'], default=self.default_data_refs)
-        #self.store_aux_in_sym = config.get_path(['west', 'data', 'aux_data_file'], self.default_store_aux_in_sym)
+        self.store_external_aux = config.get_choice(['west', 'data', 'store_aux_external'], [True, False], default=self.default_store_external_aux)
+        if ['west', 'data', 'data_refs', 'trajectories'] in config:
+            self.store_external_aux = True
         
         # Process dataset options
         dsopts_list = config.get(['west','data','datasets']) or []
@@ -794,7 +797,7 @@ class WESTDataManager:
             # we'll want to pull from the options to see if we'll be doing this, but normally, yes.
             # self.data_refs = config.get_path(['west', 'data', 'data_refs', 'iteration'], default=None)
             # This needs to be fixed to actually work, as it just does it by default.
-            if self.we_h5file_version == 8:
+            if self.store_external_aux == True:
                 self.aux_h5file = self.create_new_external_h5file(self.data_refs.format(n_iter=n_iter))
                 self.create_symlink(self.data_refs.format(n_iter=n_iter), iter_group, 'auxdata/trajectories')
                                     

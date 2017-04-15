@@ -81,7 +81,7 @@ class WESimManager:
         self.max_run_walltime = config.get(['west', 'propagation', 'max_run_wallclock'], default=None)
         self.max_total_iterations = config.get(['west', 'propagation', 'max_total_iterations'], default=None)
         # Just a temp fix for reporting storage.
-        self.data_refs = config.get_path(['west', 'data', 'data_refs', 'trajectories'])
+        self.data_refs = config.get(['west', 'data', 'data_refs', 'trajectories'], default=None)
             
     
     def __init__(self, rc=None):        

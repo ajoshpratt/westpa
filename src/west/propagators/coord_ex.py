@@ -205,15 +205,30 @@ class ExecutablePropagator(WESTPropagator):
         # Validate configuration 
         config = self.rc.config
         
+        # We absolutely need these keys.
         for key in [('west','executable','propagator','executable'),
-                    ('west','data','data_refs','trajectories'),
-                    ('west','data','data_refs','seg_rundir'),
                     ('west','data','data_refs','basis_state'),
                     ('west','data','data_refs','initial_state')]:
             config.require(key)
+
+        self.cleanup = config['west', 'executable', 'propagator', 'cleanup'] if ('west', 'executable', 'propagator', 'cleanup') in config else True
+        # These keys aren't mutually exclusive, but we do require at least one of them.
+        if ('west','data','data_refs','segment') in config:
+            pass
+            # If we're using the older style, we don't want to automatically delete things.
+            log.debug('Utilizing segment directory style: {}'.format(config[('west', 'data', 'data_refs', 'segment')]))
+            self.cleanup = False
+        else:
+            config.require(('west','data','data_refs','seg_rundir'))
+            config.require(('west','data','data_refs','trajectories'))
+            log.debug('Utilizing segment directory style: {}'.format(os.path.join(config[('west', 'data', 'data_refs', 'seg_rundir')], '{segment.n_iter:06d}/{segment.seg_id:06d}')))
+
+        
+
  
         self.segment_rundir             = config['west','data','data_refs','seg_rundir']
-        self.segment_ref_template       = self.segment_rundir + '/{segment.n_iter:06d}/{segment.seg_id:06d}'
+        #self.segment_ref_template       = self.segment_rundir + '/{segment.n_iter:06d}/{segment.seg_id:06d}'
+        self.segment_ref_template       = config['west','data','data_refs','segment'] if ('west', 'data', 'data_refs', 'segment') in config else os.path.join(self.segment_rundir, '{segment.n_iter:06d}/{segment.seg_id:06d}')
         self.basis_state_ref_template   = config['west','data','data_refs','basis_state']
         self.initial_state_ref_template = config['west','data','data_refs','initial_state']
         self.trajectory_types           = config['west','data','data_refs','trajectory_type'] 
@@ -633,7 +648,8 @@ class ExecutablePropagator(WESTPropagator):
             results = self.exec_for_segment(child_info, segment, addtl_env) 
             rc, rusage = results[1]
             run_environ = results[0]
-            self.cleanup_file_system(child_info, segment, run_environ)
+            if self.cleanup == True:
+                self.cleanup_file_system(child_info, segment, run_environ)
             
             if rc == 0:
                 segment.status = Segment.SEG_STATUS_COMPLETE
