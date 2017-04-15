@@ -16,7 +16,7 @@
 # along with WESTPA.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import os, sys, signal, random, subprocess, time, tempfile
+import os, shutil, sys, signal, random, subprocess, time, tempfile
 import numpy
 import logging
 from west.states import BasisState, InitialState
@@ -32,8 +32,15 @@ from westpa.yamlcfg import check_bool, ConfigItemMissing
 import west
 from west import Segment
 from west.propagators import WESTPropagator
+#from westtools import WESTDataReader
+from west.data_manager import WESTDataManager
+import tarfile, StringIO, os, io, cStringIO
+import cPickle
+import h5py
+vvoid_dtype = h5py.special_dtype(vlen=str) # Trying to store arbitrary data.  Not working so well...
 
-def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point):
+
+def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point, **kwargs):
     """Read progress coordinate data into the ``pcoord`` field on ``destobj``. 
     An exception will be raised if the data is malformed.  If ``single_point`` is true,
     then only one (N-dimensional) point will be read, otherwise system.pcoord_len points
@@ -58,6 +65,87 @@ def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point):
         raise ValueError('progress coordinate data has incorrect shape {!r} [expected {!r}]'.format(pcoord.shape,
                                                                                                     expected_shape))
     destobj.pcoord = pcoord
+
+def trajectory_input(fieldname, coord_file, segment, single_point):
+    # We'll assume it's... for the moment, who cares, just pickle it.
+    # Actually, it seems we need to store it as a void, since we're just using it as binary data.
+    # See http://docs.h5py.org/en/latest/strings.html
+    with open (coord_file, mode='rb') as file:
+        try:
+            data = numpy.void(file.read())
+            segment.data['trajectories/{}'.format(fieldname)] = data
+            if data.nbytes == 0:
+                log.warning('could not read any trajectory data for {}.  Disable trajectory storage in your config file to remove this warning.'.format(fieldname))
+        except TypeError:
+            # We're sending in an empty file.  That's okay for this.
+            pass
+    #del(data)
+
+def size_format(filesize, n=0):
+    if n == 0:
+        btype = 'B'
+    if n == 1:
+        btype = 'KB'
+    if n == 2:
+        btype = 'MB'
+    if n == 3:
+        # Your restart data shouldn't be anywhere near this size in 2017.
+        btype = 'GB'
+    if filesize < 1024:
+        return str('{:.2f} {}'.format(filesize, btype))
+    if filesize > 1024:
+        return size_format(float(filesize)/1024,n=n+1)
+
+def restart_input(fieldname, coord_file, segment, single_point):
+    # See http://docs.h5py.org/en/latest/strings.html
+    # It's actually a directory, in this case.
+    # We load and tar in memory, then pickle as a string, which is stored in the HDF5 file as a variable length string to ensure data integrity.
+    # We're specifying the string encoding to ensure platform consistency.
+    d = io.BytesIO()
+    t = tarfile.open(mode='w:', fileobj=d)
+    t.add(coord_file, arcname='.')
+    # If it's greater than 2 MB, maybe log a warning.
+    tarsize = len(d.getvalue())
+    itarsize = 2*1024*1024
+    try:
+        # Just for convenient formatting of basis/istates.
+        segment.seg_id = segment.state_id
+        segment.n_iter = 'PREP'
+    except:
+        pass
+    if tarsize > itarsize:
+        log.warning('{fieldname} has a filesize of {tarsize}; this may result in RAM intensive WESTPA runs.'.format(fieldname=fieldname,tarsize=size_format(tarsize)))
+    if len(t.getmembers()) <= 1:
+        #log.warning('You have not supplied any {} data.  Disable restarts in your config file to remove this warning.'.format(fieldname))
+        pass
+    segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps((d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
+    t.close()
+    d.close()
+    del(d,t)
+    log.debug('{fieldname} with size {tarsize} for seg_id {segment.seg_id} successfully loaded in iter {segment.n_iter}.'.format(segment=segment, fieldname=fieldname, tarsize=tarsize))
+    # We could enable some sort of debug for the prop, but this likely results in excessive memory usage during normal runs.
+    #with tarfile.open(fileobj=e, mode='r') as t:
+    #    for file in t.getmembers():
+    #        if file.name != '.':
+    #            try:
+    #                assert file.size != 0
+                    # It's not forbidden to place an empty file, but it probably means the run has failed.
+    #                log.warning('{file.name} has a size of 0; your segment has failed, or the file is empty.  This is likely not the behavior you want.'.format(file=file))
+    
+
+def restart_output(tarball, segment):
+    # See http://docs.h5py.org/en/latest/strings.html
+    # We 'recreate' the tarball by decoding, unpickling, and then loading it up as a file object in memory.
+    # We then untar to the location specified, and delete the restart data on the segment (as it is rather memory intensive).
+
+    e = io.BytesIO(cPickle.loads(str(segment.restart).decode('base64')))
+    with tarfile.open(fileobj=e, mode='r:') as t:
+        t.extractall(path=tarball)
+    del(segment.restart)
+    log.debug('Restart for seg_id {segment.seg_id} successfully untarred in iter {segment.n_iter} .'.format(segment=segment))
+    e.close()
+        
+    del(e,t)
 
 def aux_data_loader(fieldname, data_filename, segment, single_point):
     data = numpy.loadtxt(data_filename)
@@ -87,6 +175,8 @@ class ExecutablePropagator(WESTPropagator):
     
     # Set everywhere a progress coordinate is required
     ENV_PCOORD_RETURN        = 'WEST_PCOORD_RETURN'
+    ENV_TRAJECTORY_RETURN    = 'WEST_TRAJECTORY_RETURN'
+    ENV_RESTART_RETURN       = 'WEST_RESTART_RETURN'
     
     ENV_RAND16               = 'WEST_RAND16'
     ENV_RAND32               = 'WEST_RAND32'
@@ -112,21 +202,41 @@ class ExecutablePropagator(WESTPropagator):
         
         # A mapping of data set name ('pcoord', 'coord', 'com', etc) to a dictionary of
         # attributes like 'loader', 'dtype', etc
-        self.data_info = {}
+        # We want the pcoord last in this case, so ordereddict it is!
+        from collections import OrderedDict
+        self.data_info = OrderedDict()
         self.data_info['pcoord'] = {}
 
         # Validate configuration 
         config = self.rc.config
         
+        # We absolutely need these keys.
         for key in [('west','executable','propagator','executable'),
-                    ('west','data','data_refs','segment'),
                     ('west','data','data_refs','basis_state'),
                     ('west','data','data_refs','initial_state')]:
             config.require(key)
+
+        self.cleanup = config['west', 'executable', 'propagator', 'cleanup'] if ('west', 'executable', 'propagator', 'cleanup') in config else True
+        # These keys aren't mutually exclusive, but we do require at least one of them.
+        if ('west','data','data_refs','segment') in config:
+            pass
+            # If we're using the older style, we don't want to automatically delete things.
+            log.debug('Utilizing segment directory style: {}'.format(config[('west', 'data', 'data_refs', 'segment')]))
+            self.cleanup = False
+        else:
+            config.require(('west','data','data_refs','seg_rundir'))
+            config.require(('west','data','data_refs','trajectories'))
+            log.debug('Utilizing segment directory style: {}'.format(os.path.join(config[('west', 'data', 'data_refs', 'seg_rundir')], '{segment.n_iter:06d}/{segment.seg_id:06d}')))
+            self.segment_rundir             = config['west','data','data_refs','seg_rundir']
+
+        
+
  
-        self.segment_ref_template       = config['west','data','data_refs','segment']
+        #self.segment_ref_template       = self.segment_rundir + '/{segment.n_iter:06d}/{segment.seg_id:06d}'
+        self.segment_ref_template       = config['west','data','data_refs','segment'] if ('west', 'data', 'data_refs', 'segment') in config else os.path.join(self.segment_rundir, '{segment.n_iter:06d}/{segment.seg_id:06d}')
         self.basis_state_ref_template   = config['west','data','data_refs','basis_state']
         self.initial_state_ref_template = config['west','data','data_refs','initial_state']
+        #self.trajectory_types           = config['west','data','data_refs','trajectory_type'] 
         
         # Load additional environment variables for all child processes
         self.addtl_child_environ.update({k:str(v) for k,v in (config['west','executable','environ'] or {}).iteritems()})
@@ -165,6 +275,21 @@ class ExecutablePropagator(WESTPropagator):
                                     'loader': pcoord_loader,
                                     'enabled': True,
                                     'filename': None}
+        self.data_info['trajectory'] = {'name': 'auxdata/trajectories/trajectory',
+                                    'loader': trajectory_input,
+                                    'delram': True,
+                                    'enabled': True,
+                                    'filename': None}
+        # This is for stuff like restart files, etc.  That is, the things we'll need to continue the simulation.
+        # For now, tar it, pickle it, and call it a day.
+        # Then we untar, unpickle, and go from there.
+        import h5py
+        self.data_info['restart'] =  {'name': 'auxdata/trajectories/restart',
+                                    'loader': restart_input,
+                                    'delram': True,
+                                    'enabled': True,
+                                    'filename': None,
+                                    'dtype': h5py.new_vlen(str)}
         dataset_configs = config.get(['west', 'executable', 'datasets']) or []
         for dsinfo in dataset_configs:
             try:
@@ -177,6 +302,8 @@ class ExecutablePropagator(WESTPropagator):
             else:
                 # can never disable pcoord collection
                 dsinfo['enabled'] = True
+            #if dsname == 'auxdata/trajectories/restart' or dsname == 'auxdata/trajectories/trajectory':
+            #    dsinfo['delram'] == True
             
             loader_directive = dsinfo.get('loader')
             if loader_directive:
@@ -248,12 +375,12 @@ class ExecutablePropagator(WESTPropagator):
     def exec_child_from_child_info(self, child_info, template_args, environ):
         for (key, value) in child_info.get('environ', {}).iteritems():
             environ[key] = self.makepath(value)        
-        return self.exec_child(executable = self.makepath(child_info['executable'], template_args),
+        return (environ, self.exec_child(executable = self.makepath(child_info['executable'], template_args),
                                environ = environ,
                                cwd = self.makepath(child_info['cwd'], template_args) if child_info['cwd'] else None,
                                stdin = self.makepath(child_info['stdin'], template_args) if child_info['stdin'] else os.devnull,
                                stdout= self.makepath(child_info['stdout'], template_args) if child_info['stdout'] else None,
-                               stderr= self.makepath(child_info['stderr'], template_args) if child_info['stderr'] else None)        
+                               stderr= self.makepath(child_info['stderr'], template_args) if child_info['stderr'] else None))
         
     
     # Functions to create template arguments and environment values for child processes
@@ -336,7 +463,22 @@ class ExecutablePropagator(WESTPropagator):
         self.update_args_env_iter(template_args, environ, segment.n_iter)
         self.update_args_env_segment(template_args, environ, segment)        
         environ.update(addtl_env or {})
+        self.prepare_file_system(child_info, segment, environ)
+        child_info['cwd'] = environ['WEST_CURRENT_SEG_DATA_REF']
         return self.exec_child_from_child_info(child_info, template_args, environ)
+
+    def prepare_file_system(self, child_info, segment, environ):
+        try:
+            # If the filesystem is properly clean.
+            os.makedirs(environ['WEST_CURRENT_SEG_DATA_REF'])
+        except:
+            # If the filesystem is NOT properly clean.
+            shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
+            os.makedirs(environ['WEST_CURRENT_SEG_DATA_REF'])
+        restart_output(tarball='{}/'.format(environ['WEST_CURRENT_SEG_DATA_REF']), segment=segment)
+
+    def cleanup_file_system(self, child_info, segment, environ):
+        shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
             
     def exec_for_iteration(self, child_info, n_iter, addtl_env = None):
         '''Execute a child process with environment and template expansion from the given
@@ -380,29 +522,53 @@ class ExecutablePropagator(WESTPropagator):
             raise TypeError('state must be a BasisState or InitialState')
         
         child_info = self.exe_info.get('get_pcoord')
-        fd, rfname = tempfile.mkstemp()
-        os.close(fd)
+        pfd, prfname = tempfile.mkstemp()
+        os.close(pfd)
+        cfd, crfname = tempfile.mkstemp()
+        os.close(cfd)
+        erfname = tempfile.mkdtemp()
         
-        addtl_env = {self.ENV_PCOORD_RETURN: rfname,
-                     self.ENV_STRUCT_DATA_REF: struct_ref}
+        addtl_env = {self.ENV_PCOORD_RETURN:     prfname,
+                     self.ENV_RESTART_RETURN:    erfname,
+                     self.ENV_TRAJECTORY_RETURN: crfname,
+                     self.ENV_STRUCT_DATA_REF:   struct_ref}
 
         try:
-            rc, rusage = execfn(child_info, state, addtl_env)
+            #rc, rusage = execfn(child_info, state, addtl_env)
+            results = execfn(child_info, state, addtl_env)
+            rc, rusage = results[1]
             if rc != 0:
                 log.error('get_pcoord executable {!r} returned {}'.format(child_info['executable'], rc))
                 
-            loader = self.data_info['pcoord']['loader']
-            loader('pcoord', rfname, state, single_point = True)
+            # Why do we load the pcoord data last?  Because we may well want the restart/trajectory information.
+            # And indeed, we should send in the temp directory for the restart information to the pcoord loader
+            # so that it has the topology information, if necessary, and the current file thing.
+            cloader = self.data_info['trajectory']['loader']
+            cloader('trajectory', crfname, state, single_point = True)
+            eloader = self.data_info['restart']['loader']
+            eloader('restart', erfname, state, single_point = True)
+            ploader = self.data_info['pcoord']['loader']
+            ploader('pcoord', prfname, state, single_point = True, trajectory=crfname, restart=erfname)
         finally:
             try:
-                os.unlink(rfname)
+                os.unlink(prfname)
             except Exception as e:
-                log.warning('could not delete progress coordinate return file {!r}: {}'.format(rfname, e))
+                log.warning('could not delete progress coordinate return file {!r}: {}'.format(prfname, e))
+            try:
+                os.unlink(crfname)
+            except Exception as e:
+                log.warning('could not delete trajectory coordinate return file {!r}: {}'.format(crfname, e))
+            try:
+                shutil.rmtree(erfname)
+            except Exception as e:
+                log.warning('could not delete restart return directory {!r}: {}'.format(erfname, e))
                 
     def gen_istate(self, basis_state, initial_state):
         '''Generate a new initial state from the given basis state.'''
         child_info = self.exe_info.get('gen_istate')
-        rc, rusage = self.exec_for_initial_state(child_info, initial_state)
+        #rc, rusage = self.exec_for_initial_state(child_info, initial_state)
+        results = self.exec_for_initial_state(child_info, initial_state)
+        rc, rusage = results[1]
         if rc != 0:
             log.error('gen_istate executable {!r} returned {}'.format(child_info['executable'], rc))
             initial_state.istate_status = InitialState.ISTATE_STATUS_FAILED
@@ -422,7 +588,9 @@ class ExecutablePropagator(WESTPropagator):
         child_info = self.exe_info.get('pre_iteration')
         if child_info and child_info['enabled']:
             try:
-                rc, rusage = self.exec_for_iteration(child_info, n_iter)
+                #rc, rusage = self.exec_for_iteration(child_info, n_iter)
+                results = self.exec_for_iteration(child_info, n_iter)
+                rc, rusage = results[1]
             except OSError as e:
                 log.warning('could not execute pre-iteration program {!r}: {}'.format(child_info['executable'], e))
             else:
@@ -433,7 +601,9 @@ class ExecutablePropagator(WESTPropagator):
         child_info = self.exe_info.get('post_iteration')
         if child_info and child_info['enabled']:
             try:
-                rc, rusage = self.exec_for_iteration(child_info, n_iter)
+                #rc, rusage = self.exec_for_iteration(child_info, n_iter)
+                results = self.exec_for_iteration(child_info, n_iter)
+                rc, rusage = results[1]
             except OSError as e:
                 log.warning('could not execute post-iteration program {!r}: {}'.format(child_info['executable'], e))
             else:
@@ -452,6 +622,9 @@ class ExecutablePropagator(WESTPropagator):
             return_files = {}
             del_return_files = {}
             
+            #for dataset in sorted(self.data_info, reverse=True):
+            # We want to load the progress coordinate LAST, and it's set into the ordereddict first, so.
+            #for dataset in reversed(self.data_info):
             for dataset in self.data_info:
                 if not self.data_info[dataset].get('enabled',False):
                     continue
@@ -460,6 +633,10 @@ class ExecutablePropagator(WESTPropagator):
                 if return_template:
                     return_files[dataset] = self.makepath(return_template, self.template_args_for_segment(segment))
                     del_return_files[dataset] = False
+                elif dataset == 'restart':
+                    rfname = tempfile.mkdtemp()
+                    return_files[dataset] = rfname
+                    del_return_files[dataset] = True
                 else: 
                     (fd, rfname) = tempfile.mkstemp()
                     os.close(fd)
@@ -467,9 +644,17 @@ class ExecutablePropagator(WESTPropagator):
                     del_return_files[dataset] = True
 
                 addtl_env['WEST_{}_RETURN'.format(dataset.upper())] = return_files[dataset]
+                # This is where it all goes down.
                                         
+            # We're going to want to output the extra coordinates used for stuff...
+
             # Spawn propagator and wait for its completion
-            rc, rusage = self.exec_for_segment(child_info, segment, addtl_env) 
+            #used_environ, rc, rusage = self.exec_for_segment(child_info, segment, addtl_env) 
+            results = self.exec_for_segment(child_info, segment, addtl_env) 
+            rc, rusage = results[1]
+            run_environ = results[0]
+            if self.cleanup == True:
+                self.cleanup_file_system(child_info, segment, run_environ)
             
             if rc == 0:
                 segment.status = Segment.SEG_STATUS_COMPLETE
@@ -483,7 +668,10 @@ class ExecutablePropagator(WESTPropagator):
                 continue
             
             # Extract data and store on segment for recording in the master thread/process/node
-            for dataset in self.data_info:
+            # We want to load the pcoord last, as we may wish to directly manipulate trajectories.
+
+            #for dataset in self.data_info:
+            for dataset in reversed(self.data_info):
                 # pcoord is always enabled (see __init__)
                 if not self.data_info[dataset].get('enabled',False):
                     continue
@@ -491,13 +679,37 @@ class ExecutablePropagator(WESTPropagator):
                 filename = return_files[dataset]
                 loader = self.data_info[dataset]['loader']
                 try:
-                    loader(dataset, filename, segment, single_point=False)
+                    segment.file_type = self.trajectory_types
+                except:
+                    pass
+                try:
+                    if dataset == 'pcoord':
+                        # Yes, I'm considering changing the default behavior.  It's faster to just supply the files directly on disk during propagation,
+                        # rather than re-creating temp files just to have it work for a custom pcoord load function.  Really, we just need to make sure
+                        # that the pcoord loaders accept *kwargs; nothing else should be necessary.
+                        loader(dataset, filename, segment, single_point=False, trajectory=return_files['trajectory'], restart=return_files['restart'])
+                    else:
+                        loader(dataset, filename, segment, single_point=False)
                 except Exception as e:
                     log.error('could not read {} from {!r}: {!r}'.format(dataset, filename, e))
                     segment.status = Segment.SEG_STATUS_FAILED 
                     break
-                else:
-                    if del_return_files[dataset]:
+
+            # Why are we deleting the dataset AFTER we load it?  We want to expose the trajectory and restart information to the
+            # pcoord loader, if applicable.
+            for dataset in reversed(self.data_info):
+                if not self.data_info[dataset].get('enabled',False):
+                    continue
+                filename = return_files[dataset]
+                if del_return_files[dataset]:
+                    if dataset == 'restart':
+                        try:
+                            shutil.rmtree(filename)
+                        except Exception as e:
+                            log.warning('could not delete {} file {!r}: {!r}'.format(dataset, filename, e))
+                        else:
+                            log.debug('deleted {} directory {!r}'.format(dataset, filename))    
+                    else:
                         try:
                             os.unlink(filename)
                         except Exception as e:
@@ -510,4 +722,5 @@ class ExecutablePropagator(WESTPropagator):
             # Record timing info
             segment.walltime = time.time() - starttime
             segment.cputime = rusage.ru_utime
+        # Clean up the file system.
         return segments
