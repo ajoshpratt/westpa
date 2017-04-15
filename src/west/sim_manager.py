@@ -472,7 +472,10 @@ class WESimManager:
         return futures
                                     
     def propagate(self):
+        from westpa.progress import (ProgressIndicator)
         segments = self.incomplete_segments.values()
+        self.progress = ProgressIndicator()
+        pi = self.progress
         log.debug('iteration {:d}: propagating {:d} segments'.format(self.n_iter, len(segments)))
         # Dereference restart data
         for seg in segments:
@@ -507,76 +510,83 @@ class WESimManager:
         if self.block_write == None:
             self.block_write = 1
             self.istate_block_write = 1
-        while futures:
-            # TODO: add capacity for timeout or SIGINT here
-            future_return = self.work_manager.wait_any_return_done(futures)
-            #print(future)
-            for future in future_return: 
-                futures.remove(future)
-            # block the results.  The function already supports block writing.
-            for future in future_return:
-                if future in segment_futures:
-                    segment_futures.remove(future)
-                    incoming = future.get_result()
-                    self.n_propagated += 1
-                    
-                    for segment in incoming:
-                        result_futures.add(segment)
-                        # We don't want to send this on, actually.  Kill it.
-                        # It's huge, and transporting it across threads is expensive.
-                        #del(segment.restart)
+        pi.new_operation('Running simulation', len(futures))
+        with pi:
+            while futures:
+                # TODO: add capacity for timeout or SIGINT here
+                future_return = self.work_manager.wait_any_return_done(futures)
+                #print(future)
+                for future in future_return: 
+                    futures.remove(future)
+                # block the results.  The function already supports block writing.
+                for future in future_return:
+                    if future in segment_futures:
+                        segment_futures.remove(future)
+                        incoming = future.get_result()
+                        self.n_propagated += 1
+                        
+                        for segment in incoming:
+                            result_futures.add(segment)
+                            # We don't want to send this on, actually.  Kill it.
+                            # It's huge, and transporting it across threads is expensive.
+                            #del(segment.restart)
 
-                    self.segments.update({segment.seg_id: segment for segment in incoming})
-                    self.completed_segments.update({segment.seg_id: segment for segment in incoming})
-                    
-                    self.we_driver.assign(incoming)
+                        self.segments.update({segment.seg_id: segment for segment in incoming})
+                        self.completed_segments.update({segment.seg_id: segment for segment in incoming})
+                        
+                        self.we_driver.assign(incoming)
 
-                    
-                elif future in istate_gen_futures:
-                    istate_gen_futures.remove(future)
-                    _basis_state, initial_state = future.get_result()
-                    log.debug('received newly-prepared initial state {!r}'.format(initial_state))
-                    initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
-                    self.we_driver.avail_initial_states[initial_state.state_id] = initial_state
-                    new_state_futures.add(initial_state)
-                else:
-                    log.error('unknown future {!r} received from work manager'.format(future))
-                    raise AssertionError('untracked future {!r}'.format(future))                    
-            if float(len(result_futures)) / float(self.block_write) < 1.1 and self.block_write >= 1:
-                self.block_write -= self.propagator_block_size
-            if self.block_write <= 0:
-                self.block_write = 1
+                        
+                    elif future in istate_gen_futures:
+                        istate_gen_futures.remove(future)
+                        _basis_state, initial_state = future.get_result()
+                        log.debug('received newly-prepared initial state {!r}'.format(initial_state))
+                        initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
+                        self.we_driver.avail_initial_states[initial_state.state_id] = initial_state
+                        new_state_futures.add(initial_state)
+                        pi.progress -= initial_state
+                    else:
+                        log.error('unknown future {!r} received from work manager'.format(future))
+                        raise AssertionError('untracked future {!r}'.format(future))                    
+                if float(len(result_futures)) / float(self.block_write) < 1.1 and self.block_write >= 1:
+                    self.block_write -= self.propagator_block_size
+                if self.block_write <= 0:
+                    self.block_write = 1
 
-            if float(len(new_state_futures)) / float(self.istate_block_write) < 1.1 and self.istate_block_write >= 1:
-                self.istate_block_write -= self.propagator_block_size
-            if self.istate_block_write <= 0:
-                self.istate_block_write = 1
+                if float(len(new_state_futures)) / float(self.istate_block_write) < 1.1 and self.istate_block_write >= 1:
+                    self.istate_block_write -= self.propagator_block_size
+                if self.istate_block_write <= 0:
+                    self.istate_block_write = 1
 
-            if len(result_futures) >= self.block_write:
-                new_seg_len = len(result_futures)
-                with self.data_manager.expiring_flushing_lock():                        
-                    self.data_manager.update_segments(self.n_iter, result_futures)
-                    result_futures = set()
-                #print(self.propagator_block_size)
-                #result_futures = self.work_manager.submit(self.data_manager.update_segments, args=(self.n_iter, incoming))
-                # Let's adjust the timing loop, maybe?
-                #print(float(new_len) / float(self.block_write))
-                # The idea here is to just... see how many we're returning, and just up the amount we process in one block to optimize writes.
-                if float(new_seg_len) / float(self.block_write) > 1.1:
-                    self.block_write += self.propagator_block_size
-            new_state_len = 1
-            if len(new_state_futures) >= self.istate_block_write:
-                new_state_len = len(new_state_futures)
-                with self.data_manager.expiring_flushing_lock():
-                    self.data_manager.update_initial_states(new_state_futures, n_iter=self.n_iter+1)
-                    new_state_futures = set()
-                if float(new_state_len) / float(self.istate_block_write) > 1.1:
-                    self.istate_block_write += self.propagator_block_size
-            print(new_seg_len, self.block_write, new_state_len, self.istate_block_write, len(futures))
-            if len(futures) == 0:
-                new_istate_futures = self.get_istate_futures()
-                istate_gen_futures.update(new_istate_futures)
-                futures.update(new_istate_futures)
+                if len(result_futures) >= self.block_write:
+                    new_seg_len = len(result_futures)
+                    with self.data_manager.expiring_flushing_lock():                        
+                        self.data_manager.update_segments(self.n_iter, result_futures)
+                        result_futures = set()
+                    #print(self.propagator_block_size)
+                    #result_futures = self.work_manager.submit(self.data_manager.update_segments, args=(self.n_iter, incoming))
+                    # Let's adjust the timing loop, maybe?
+                    #print(float(new_len) / float(self.block_write))
+                    # The idea here is to just... see how many we're returning, and just up the amount we process in one block to optimize writes.
+                    if float(new_seg_len) / float(self.block_write) > 1.1:
+                        self.block_write += self.propagator_block_size
+                    pi.progress +=(new_seg_len)
+                new_state_len = 1
+                if len(new_state_futures) >= self.istate_block_write:
+                    new_state_len = len(new_state_futures)
+                    with self.data_manager.expiring_flushing_lock():
+                        self.data_manager.update_initial_states(new_state_futures, n_iter=self.n_iter+1)
+                        new_state_futures = set()
+                    if float(new_state_len) / float(self.istate_block_write) > 1.1:
+                        self.istate_block_write += self.propagator_block_size
+                    pi.progress +=(new_state_len)
+                #print(new_seg_len, self.block_write, new_state_len, self.istate_block_write, len(futures))
+                if len(futures) == 0:
+                    new_istate_futures = self.get_istate_futures()
+                    istate_gen_futures.update(new_istate_futures)
+                    futures.update(new_istate_futures)
+                    pi.progress -= len(new_istate_futures)
+                
 
 
         if len(result_futures) > 0:
