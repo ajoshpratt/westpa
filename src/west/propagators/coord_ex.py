@@ -71,10 +71,14 @@ def trajectory_input(fieldname, coord_file, segment, single_point):
     # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
     with open (coord_file, mode='rb') as file:
-        data = numpy.void(file.read())
-    segment.data['trajectories/{}'.format(fieldname)] = data
-    if data.nbytes == 0:
-        log.warning('could not read any trajectory data for {}.  Disable trajectory storage in your config file to remove this warning.'.format(fieldname))
+        try:
+            data = numpy.void(file.read())
+            segment.data['trajectories/{}'.format(fieldname)] = data
+            if data.nbytes == 0:
+                log.warning('could not read any trajectory data for {}.  Disable trajectory storage in your config file to remove this warning.'.format(fieldname))
+        except TypeError:
+            # We're sending in an empty file.  That's okay for this.
+            pass
     #del(data)
 
 def size_format(filesize, n=0):
@@ -111,9 +115,10 @@ def restart_input(fieldname, coord_file, segment, single_point):
         pass
     if tarsize > itarsize:
         log.warning('{fieldname} has a filesize of {tarsize}; this may result in RAM intensive WESTPA runs.'.format(fieldname=fieldname,tarsize=size_format(tarsize)))
-    segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps((d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
     if len(t.getmembers()) <= 1:
-        log.warning('You have not supplied any {} data.  Disable restarts in your config file to remove this warning.'.format(fieldname))
+        #log.warning('You have not supplied any {} data.  Disable restarts in your config file to remove this warning.'.format(fieldname))
+        pass
+    segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps((d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
     t.close()
     d.close()
     del(d,t)
@@ -222,16 +227,16 @@ class ExecutablePropagator(WESTPropagator):
             config.require(('west','data','data_refs','seg_rundir'))
             config.require(('west','data','data_refs','trajectories'))
             log.debug('Utilizing segment directory style: {}'.format(os.path.join(config[('west', 'data', 'data_refs', 'seg_rundir')], '{segment.n_iter:06d}/{segment.seg_id:06d}')))
+            self.segment_rundir             = config['west','data','data_refs','seg_rundir']
 
         
 
  
-        self.segment_rundir             = config['west','data','data_refs','seg_rundir']
         #self.segment_ref_template       = self.segment_rundir + '/{segment.n_iter:06d}/{segment.seg_id:06d}'
         self.segment_ref_template       = config['west','data','data_refs','segment'] if ('west', 'data', 'data_refs', 'segment') in config else os.path.join(self.segment_rundir, '{segment.n_iter:06d}/{segment.seg_id:06d}')
         self.basis_state_ref_template   = config['west','data','data_refs','basis_state']
         self.initial_state_ref_template = config['west','data','data_refs','initial_state']
-        self.trajectory_types           = config['west','data','data_refs','trajectory_type'] 
+        #self.trajectory_types           = config['west','data','data_refs','trajectory_type'] 
         
         # Load additional environment variables for all child processes
         self.addtl_child_environ.update({k:str(v) for k,v in (config['west','executable','environ'] or {}).iteritems()})
@@ -673,7 +678,10 @@ class ExecutablePropagator(WESTPropagator):
                 
                 filename = return_files[dataset]
                 loader = self.data_info[dataset]['loader']
-                segment.file_type = self.trajectory_types
+                try:
+                    segment.file_type = self.trajectory_types
+                except:
+                    pass
                 try:
                     if dataset == 'pcoord':
                         # Yes, I'm considering changing the default behavior.  It's faster to just supply the files directly on disk during propagation,
