@@ -259,7 +259,7 @@ class WESTDataManager:
         if 'pcoord' in self.dataset_options:
             if self.dataset_options['pcoord']['h5path'] != 'pcoord':
                 raise ValueError('cannot override pcoord storage location')
-    
+
     def __init__(self, rc=None):
         
         self.rc = rc or westpa.rc
@@ -852,7 +852,8 @@ class WESTDataManager:
                         #segment.restart = ibstate['istate_index'].regionref[(segment.parent_id*-1)-1]
                         #segment.h5file = self.we_h5file
                         #segment.ref_function = self._read_only_ref_return_
-                        segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
+                        #segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
+                        segment.restart = ibstate['istate_index'].regionref[(segment.parent_id*-1)-1]
                     
                         
             if total_parents > 0:
@@ -1014,8 +1015,10 @@ class WESTDataManager:
                             dest_sel.select_hyperslab((segment.seg_id,)+(0,)*source_rank, (1,)+auxdataset.shape)
                             dset.id.write(source_sel, dest_sel, auxdataset)                                
                         #if 'delram' in dsopts.keys():
-                        #del(auxdataset)
-                        #del(segment.data[dsname])
+                        if dsopts['name'] == 'trajectories/restart' or dsopts['name'] == 'trajectories/trajectory':
+                        #if dsopts['name'] == 'trajectories/trajectory':
+                            del(auxdataset)
+                            del(segment.data[dsname])
             	    if 'delram' in dsopts.keys():
                         del dsets[dsname]
     
@@ -1094,7 +1097,8 @@ class WESTDataManager:
                         #segment.h5filename = self.h5_file_name
                         #segment.ref_function = self._read_only_ref_return_
                         #segment.h5file = self.we_h5file
-                        segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
+                        segment.restart = ibstate['istate_index'].regionref[(segment.parent_id*-1)-1]
+                        #segment.restart = ibstate['istate_index']['restart'][(segment.parent_id*-1)-1]
                 segment.wtg_parent_ids = set(imap(long,wtg_parent_ids))
                 assert len(segment.wtg_parent_ids) == wtg_n_parents
                 segments.append(segment)

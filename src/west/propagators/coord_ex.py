@@ -123,11 +123,18 @@ def restart_output(tarball, segment):
     #print(segment)
     #print(segment.data.keys())
     #import h5py
-    #h5file = h5py.File('/home/judas/kcrown_example/west.h5', 'r')
+    #we_h5file = h5py.File('/home/judas/kcrown_example/west.h5', 'r')
+    #try:
+    #    segment.restart = we_h5file[segment.restart]['trajectories/restart'][segment.parent_id]
+    #except:
+    #    pass
+        # From an istate
+    #segment.restart = we_h5file[segment.restart]['restart'][0]
+    #    #pass
     e = io.BytesIO(cPickle.loads(str(segment.restart).decode('base64')))
     with tarfile.open(fileobj=e, mode='r:') as t:
         t.extractall(path=tarball)
-    #del(segment.restart)
+    del(segment.restart)
     log.debug('Restart for seg_id {segment.seg_id} successfully untarred in iter {segment.n_iter} .'.format(segment=segment))
     e.close()
     #t.close()
@@ -273,6 +280,8 @@ class ExecutablePropagator(WESTPropagator):
             else:
                 # can never disable pcoord collection
                 dsinfo['enabled'] = True
+            if dsname == 'auxdata/trajectories/restart' or dsname == 'auxdata/trajectories/trajectory':
+                dsinfo['delram'] == True
             
             loader_directive = dsinfo.get('loader')
             if loader_directive:
@@ -445,7 +454,8 @@ class ExecutablePropagator(WESTPropagator):
         restart_output(tarball='{}/'.format(environ['WEST_CURRENT_SEG_DATA_REF']), segment=segment)
 
     def cleanup_file_system(self, child_info, segment, environ):
-        shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
+        #shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
+        pass
         #return 0
             
     def exec_for_iteration(self, child_info, n_iter, addtl_env = None):

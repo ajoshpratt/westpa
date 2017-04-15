@@ -478,8 +478,9 @@ class WESimManager:
         for seg in segments:
             try:
                 seg.restart = self.data_manager.we_h5file[seg.restart]['trajectories/restart'][seg.parent_id]
-            except:
                 # From an istate
+            except:
+                seg.restart = self.data_manager.we_h5file[seg.restart]['restart'][0]
                 pass
         
         # all futures dispatched for this iteration
@@ -523,7 +524,7 @@ class WESimManager:
                         result_futures.add(segment)
                         # We don't want to send this on, actually.  Kill it.
                         # It's huge, and transporting it across threads is expensive.
-                        del(segment.restart)
+                        #del(segment.restart)
 
                     self.segments.update({segment.seg_id: segment for segment in incoming})
                     self.completed_segments.update({segment.seg_id: segment for segment in incoming})
@@ -571,7 +572,7 @@ class WESimManager:
                     new_state_futures = set()
                 if float(new_state_len) / float(self.istate_block_write) > 1.1:
                     self.istate_block_write += self.propagator_block_size
-            #print(new_seg_len, self.block_write, new_state_len, self.istate_block_write, len(futures))
+            print(new_seg_len, self.block_write, new_state_len, self.istate_block_write, len(futures))
             if len(futures) == 0:
                 new_istate_futures = self.get_istate_futures()
                 istate_gen_futures.update(new_istate_futures)
