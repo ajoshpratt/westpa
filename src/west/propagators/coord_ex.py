@@ -73,72 +73,71 @@ def trajectory_input(fieldname, coord_file, segment, single_point):
     with open (coord_file, mode='rb') as file:
         data = numpy.void(file.read())
     segment.data['trajectories/{}'.format(fieldname)] = data
-    del(data)
-    #if data.nbytes == 0:
-    #    raise ValueError('could not read any coordinate data for {}'.format(fieldname))
+    if data.nbytes == 0:
+        log.warning('could not read any trajectory data for {}.  Disable trajectory storage in your config file to remove this warning.'.format(fieldname))
+    #del(data)
+
+def size_format(filesize, n=0):
+    if n == 0:
+        btype = 'B'
+    if n == 1:
+        btype = 'KB'
+    if n == 2:
+        btype = 'MB'
+    if n == 3:
+        btype = 'GB'
+    if filesize < 1024:
+        return str('{:.2f} {}'.format(filesize, btype))
+    if filesize > 1024:
+        return size_format(float(filesize)/1024,n=n+1)
 
 def restart_input(fieldname, coord_file, segment, single_point):
-    # We'll assume it's... for the moment, who cares, just pickle it.
-    # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
     # It's actually a directory, in this case.
-    #d = cStringIO.StringIO()
+    # We load and tar in memory, then pickle as a string, which is stored in the HDF5 file as a variable length string to ensure data integrity.
+    # We're specifying the string encoding to ensure platform consistency.
     d = io.BytesIO()
-    #print(d.getvalue())
     t = tarfile.open(mode='w:', fileobj=d)
-    #with tarfile.open(mode='w', fileobj=d) as t:
     t.add(coord_file, arcname='.')
-    #print(segment)
-    #for file in t.getmembers():
-    #    print(file.name, file.size)
+    # If it's greater than 2 MB, maybe log a warning.
+    tarsize = len(d.getvalue())
+    itarsize = 2*1024*1024
+    try:
+        # Just for convenient formatting of basis/istates.
+        segment.seg_id = segment.state_id
+        segment.n_iter = 'prep'
+    except:
+        pass
+    if tarsize > itarsize:
+        log.warning('{fieldname} has a filesize of {tarsize}; this may result in RAM intensive WESTPA runs.'.format(fieldname=fieldname,tarsize=size_format(tarsize)))
     segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps((d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
+    if segment.data['trajectories/{}'.format(fieldname)].nbytes == 0:
+        log.warning('could not read any restart data for {}.  Disable restarts in your config file to remove this warning.'.format(fieldname))
     t.close()
     d.close()
     del(d,t)
+    log.debug('{fieldname} with size {tarsize} for seg_id {segment.seg_id} successfully loaded in iter {segment.n_iter}.'.format(segment=segment, fieldname=fieldname, tarsize=tarsize))
+    # We could enable some sort of debug for the prop.
     #with tarfile.open(fileobj=e, mode='r') as t:
-    #    t.extractall(path='/tmp')
     #    for file in t.getmembers():
-            #print(file.name, file.size)
     #        if file.name != '.':
     #            try:
     #                assert file.size != 0
                     # It's not forbidden to place an empty file, but it probably means the run has failed.
     #                log.warning('{file.name} has a size of 0; your segment has failed, or the file is empty.  This is likely not the behavior you want.'.format(file=file))
-                    #print(file.name, file.size, e)
-                    #break
-
-    #log.debug('{fieldname} for seg_id {segment.seg_id} successfully loaded in iter {segment.n_iter} .'.format(segment=segment, fieldname=fieldname))
-    #d.close()
-    #assert segment.data['trajectories/{}'.format(fieldname)].nbytes != 0
-    #print(cPickle.loads(segment.data['trajectories/{}'.format(fieldname)]))
     
-    #if data.nbytes == 0:
-    #    raise ValueError('could not read any coordinate data for {}'.format(fieldname))
 
 def restart_output(tarball, segment):
-    # We'll assume it's... for the moment, who cares, just pickle it.
-    # Actually, it seems we need to store it as a void, since we're just using it as binary data.
     # See http://docs.h5py.org/en/latest/strings.html
+    # We 'recreate' the tarball by decoding, unpickling, and then loading it up as a file object in memory.
+    # We then untar to the location specified, and delete the restart data on the segment (as it is rather memory intensive).
 
-    #print(segment)
-    #print(segment.data.keys())
-    #import h5py
-    #we_h5file = h5py.File('/home/judas/kcrown_example/west.h5', 'r')
-    #try:
-    #    segment.restart = we_h5file[segment.restart]['trajectories/restart'][segment.parent_id]
-    #except:
-    #    pass
-        # From an istate
-    #segment.restart = we_h5file[segment.restart]['restart'][0]
-    #    #pass
     e = io.BytesIO(cPickle.loads(str(segment.restart).decode('base64')))
     with tarfile.open(fileobj=e, mode='r:') as t:
         t.extractall(path=tarball)
     del(segment.restart)
     log.debug('Restart for seg_id {segment.seg_id} successfully untarred in iter {segment.n_iter} .'.format(segment=segment))
     e.close()
-    #t.close()
-    #e.close()
         
     del(e,t)
 
@@ -197,7 +196,9 @@ class ExecutablePropagator(WESTPropagator):
         
         # A mapping of data set name ('pcoord', 'coord', 'com', etc) to a dictionary of
         # attributes like 'loader', 'dtype', etc
-        self.data_info = {}
+        # We want the pcoord last in this case, so ordereddict it is!
+        from collections import OrderedDict
+        self.data_info = OrderedDict()
         self.data_info['pcoord'] = {}
 
         # Validate configuration 
@@ -280,8 +281,8 @@ class ExecutablePropagator(WESTPropagator):
             else:
                 # can never disable pcoord collection
                 dsinfo['enabled'] = True
-            if dsname == 'auxdata/trajectories/restart' or dsname == 'auxdata/trajectories/trajectory':
-                dsinfo['delram'] == True
+            #if dsname == 'auxdata/trajectories/restart' or dsname == 'auxdata/trajectories/trajectory':
+            #    dsinfo['delram'] == True
             
             loader_directive = dsinfo.get('loader')
             if loader_directive:
@@ -447,16 +448,16 @@ class ExecutablePropagator(WESTPropagator):
 
     def prepare_file_system(self, child_info, segment, environ):
         try:
+            # If the filesystem is properly clean.
             os.makedirs(environ['WEST_CURRENT_SEG_DATA_REF'])
         except:
+            # If the filesystem is NOT properly clean.
             shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
             os.makedirs(environ['WEST_CURRENT_SEG_DATA_REF'])
         restart_output(tarball='{}/'.format(environ['WEST_CURRENT_SEG_DATA_REF']), segment=segment)
 
     def cleanup_file_system(self, child_info, segment, environ):
         shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
-        #pass
-        #return 0
             
     def exec_for_iteration(self, child_info, n_iter, addtl_env = None):
         '''Execute a child process with environment and template expansion from the given
@@ -518,12 +519,19 @@ class ExecutablePropagator(WESTPropagator):
             if rc != 0:
                 log.error('get_pcoord executable {!r} returned {}'.format(child_info['executable'], rc))
                 
+            # Why do we load the pcoord data last?  Because we may well want the restart/trajectory information.
+            # And indeed, we should send in the temp directory for the restart information to the pcoord loader
+            # so that it has the topology information, if necessary, and the current file thing.
             cloader = self.data_info['trajectory']['loader']
             cloader('trajectory', crfname, state, single_point = True)
             eloader = self.data_info['restart']['loader']
             eloader('restart', erfname, state, single_point = True)
             ploader = self.data_info['pcoord']['loader']
-            ploader('pcoord', prfname, state, single_point = True)
+            try:
+                ploader('pcoord', prfname, state, single_point = True, restart_dir=erfname, rundir=None)
+            except:
+                # Assume old style pcoord loader.
+                ploader('pcoord', prfname, state, single_point = True)
         finally:
             try:
                 os.unlink(prfname)
@@ -532,11 +540,11 @@ class ExecutablePropagator(WESTPropagator):
             try:
                 os.unlink(crfname)
             except Exception as e:
-                log.warning('could not delete progress coordinate return file {!r}: {}'.format(crfname, e))
+                log.warning('could not delete trajectory coordinate return file {!r}: {}'.format(crfname, e))
             try:
                 shutil.rmtree(erfname)
             except Exception as e:
-                log.warning('could not delete progress coordinate return file {!r}: {}'.format(erfname, e))
+                log.warning('could not delete restart return directory {!r}: {}'.format(erfname, e))
                 
     def gen_istate(self, basis_state, initial_state):
         '''Generate a new initial state from the given basis state.'''
@@ -597,6 +605,9 @@ class ExecutablePropagator(WESTPropagator):
             return_files = {}
             del_return_files = {}
             
+            #for dataset in sorted(self.data_info, reverse=True):
+            # We want to load the progress coordinate LAST, and it's set into the ordereddict first, so.
+            #for dataset in reversed(self.data_info):
             for dataset in self.data_info:
                 if not self.data_info[dataset].get('enabled',False):
                     continue
@@ -607,7 +618,6 @@ class ExecutablePropagator(WESTPropagator):
                     del_return_files[dataset] = False
                 elif dataset == 'restart':
                     rfname = tempfile.mkdtemp()
-                    #os.close(fd)
                     return_files[dataset] = rfname
                     del_return_files[dataset] = True
                 else: 
@@ -640,7 +650,10 @@ class ExecutablePropagator(WESTPropagator):
                 continue
             
             # Extract data and store on segment for recording in the master thread/process/node
-            for dataset in self.data_info:
+            # We want to load the pcoord last, as we may wish to directly manipulate trajectories.
+
+            #for dataset in self.data_info:
+            for dataset in reversed(self.data_info):
                 # pcoord is always enabled (see __init__)
                 if not self.data_info[dataset].get('enabled',False):
                     continue
@@ -677,5 +690,4 @@ class ExecutablePropagator(WESTPropagator):
             segment.walltime = time.time() - starttime
             segment.cputime = rusage.ru_utime
         # Clean up the file system.
-        #shutil.rmtree(self.segment_rundir)
         return segments

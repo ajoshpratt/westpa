@@ -36,6 +36,20 @@ from pickle import PickleError
 
 EPS = numpy.finfo(weight_dtype).eps
 
+def size_format(filesize, n=0):
+    if n == 0:
+        btype = 'B'
+    if n == 1:
+        btype = 'KB'
+    if n == 2:
+        btype = 'MB'
+    if n == 3:
+        btype = 'GB'
+    if filesize < 1024:
+        return str('{:.2f} {}'.format(filesize, btype))
+    if filesize > 1024:
+        return size_format(float(filesize)/1024,n=n+1)
+
 def grouper(n, iterable, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
     # grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx
@@ -544,7 +558,7 @@ class WESimManager:
                         initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
                         self.we_driver.avail_initial_states[initial_state.state_id] = initial_state
                         new_state_futures.add(initial_state)
-                        pi.progress -= initial_state
+                        pi.progress -= 1
                     else:
                         log.error('unknown future {!r} received from work manager'.format(future))
                         raise AssertionError('untracked future {!r}'.format(future))                    
@@ -768,11 +782,11 @@ class WESimManager:
                                           .format(walltime,
                                                   cputime))
                 import os
-                #try:
-                self.rc.pstatus('{0} size in MB: {1}\n'\
-                                      .format(self.data_refs.format(n_iter=self.n_iter-1), float(os.path.getsize(self.data_refs.format(n_iter=self.n_iter-1)))/1024/1024))
-                #except:
-                #    pass
+                try:
+                    self.rc.pstatus('Trajectory size: {1}, {0}\n'\
+                                          .format(self.data_refs.format(n_iter=self.n_iter-1), size_format(os.path.getsize(self.data_refs.format(n_iter=self.n_iter-1)))))
+                except:
+                    pass
                 self.rc.pflush()
             finally:
                 self.data_manager.flush_backing()
