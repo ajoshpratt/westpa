@@ -143,11 +143,8 @@ class WESTErrorReporting:
         {linebreak}
         {loader.__module__}.{loader.func_name}:
         {e}
-        Traceback:
-        {traceback[1]}
-        {traceback[2]}
-        {traceback[3]}
-        {traceback[4]}
+
+        {traceback}
         {linebreak}
         """,
         'id': 'E2' }
@@ -448,8 +445,13 @@ class WESTErrorReporting:
             if self.report_all_errors == False:
                 self.reported_errors[error['msg']] = True
 
+    class ErrorHandled(Exception):
+        pass
+
     def raise_exception(self):
-        raise Exception('Error reported from {}'.format(self.cp))
+        raise self.ErrorHandled('Error reported from {}'.format(self.cp))
 
     def format_stderr(self, err):
         return  "\n        ".join(err.splitlines()[(-1*self.error_lines):]) 
+
+

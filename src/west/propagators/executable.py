@@ -790,11 +790,15 @@ class ExecutablePropagator(WESTPropagator):
                 except Exception as e:
                     #print(log.exception(e))
                     a = traceback.format_exc()
-                    a = a.split('\n')
+                    #a = a.split('\n')
+                    a = "\n        ".join(a.splitlines()[:])
                     #print(e, dataset)
                     #if dataset != 'pcoord':
                     #    error.report_segment_error(error.RUNSEG_TMP_ERROR, segment=segment, filename=filename, dataset=dataset, e=e)
-                    error.report_segment_error(error.RUNSEG_TMP_ERROR, segment=segment, filename=filename, dataset=dataset, e=e, loader=loader, traceback=a)
+
+                    # We catch this if the error hasn't already been handled.
+                    if e.__class__ != error.ErrorHandled:
+                        error.report_segment_error(error.RUNSEG_TMP_ERROR, segment=segment, filename=filename, dataset=dataset, e=e, loader=loader, traceback=a)
                     #else:
                     #    error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=segment, filename=filename, dataset=dataset, e=e)
                     #log.error('could not read {} from {!r}: {!r}'.format(dataset, filename, e))
