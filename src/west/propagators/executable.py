@@ -116,9 +116,10 @@ def restart_input(fieldname, coord_file, segment, single_point):
     if tarsize > itarsize:
         log.warning('{fieldname} has a filesize of {tarsize}; this may result in RAM intensive WESTPA runs.'.format(fieldname=fieldname,tarsize=size_format(tarsize)))
     if len(t.getmembers()) <= 1:
-        #log.warning('You have not supplied any {} data.  Disable restarts in your config file to remove this warning.'.format(fieldname))
-        pass
-    segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps((d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
+        log.warning('You have not supplied any {} data.  Disable restarts in your config file to remove this warning.'.format(fieldname))
+        del(segment.data['trajectories/{}'.format(fieldname)])
+    else:
+        segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps((d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
     t.close()
     d.close()
     del(d,t)
@@ -149,9 +150,14 @@ def restart_output(tarball, segment):
 
 def aux_data_loader(fieldname, data_filename, segment, single_point):
     data = numpy.loadtxt(data_filename)
-    segment.data[fieldname] = data
     if data.nbytes == 0:
-        raise ValueError('could not read any data for {}'.format(fieldname))
+        #raise ValueError('could not read any data for {}'.format(fieldname))
+        # We may wish to enable an environment in which everything is handled within python.
+        # Ergo, perhaps this shouldn't immediately break; if the field isn't set properly, it'll break
+        # down the line when it tries to store the data (which happens half the time anyway).
+        log.warning('could not read any data for {}'.format(fieldname))
+    else:
+        segment.data[fieldname] = data
     
     
 class ExecutablePropagator(WESTPropagator):
@@ -669,9 +675,11 @@ class ExecutablePropagator(WESTPropagator):
             
             # Extract data and store on segment for recording in the master thread/process/node
             # We want to load the pcoord last, as we may wish to directly manipulate trajectories.
+            # Actually, I take it back.  We want to load the pcoord first such that we may calculate properties
+            # on the trajectory while it still exists in the filesystem.
 
-            #for dataset in self.data_info:
-            for dataset in reversed(self.data_info):
+            for dataset in self.data_info:
+            #for dataset in reversed(self.data_info):
                 # pcoord is always enabled (see __init__)
                 if not self.data_info[dataset].get('enabled',False):
                     continue
@@ -687,7 +695,11 @@ class ExecutablePropagator(WESTPropagator):
                         # Yes, I'm considering changing the default behavior.  It's faster to just supply the files directly on disk during propagation,
                         # rather than re-creating temp files just to have it work for a custom pcoord load function.  Really, we just need to make sure
                         # that the pcoord loaders accept *kwargs; nothing else should be necessary.
-                        loader(dataset, filename, segment, single_point=False, trajectory=return_files['trajectory'], restart=return_files['restart'])
+                        try:
+                            loader(dataset, filename, segment, single_point=False, trajectory=return_files['trajectory'], restart=return_files['restart'])
+                        except:
+                            # Compatibility for older calls.  If this call doesn't work, the normal error handling should sort it.
+                            loader(dataset, filename, segment, single_point=False)
                     else:
                         loader(dataset, filename, segment, single_point=False)
                 except Exception as e:
@@ -697,7 +709,8 @@ class ExecutablePropagator(WESTPropagator):
 
             # Why are we deleting the dataset AFTER we load it?  We want to expose the trajectory and restart information to the
             # pcoord loader, if applicable.
-            for dataset in reversed(self.data_info):
+            #for dataset in reversed(self.data_info):
+            for dataset in self.data_info:
                 if not self.data_info[dataset].get('enabled',False):
                     continue
                 filename = return_files[dataset]

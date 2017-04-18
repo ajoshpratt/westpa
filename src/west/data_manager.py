@@ -999,6 +999,10 @@ class WESTDataManager:
                     except KeyError:
                         dsopts = normalize_dataset_options({'name': dsname}, path_prefix='auxdata')
                     
+                    if shape == (0,):
+                        # We didn't load anything, and should probably fail out (they should disable it, or).
+                        raise ValueError('Failed to load any data from dset: {}'.format(dsname))
+                        
                     shape = (n_total_segments,) + shape
                     dset = require_dataset_from_dsopts(iter_group, dsopts, shape, dtype,
                                                        autocompress_threshold=self.aux_compression_threshold, n_iter=n_iter)
@@ -1543,6 +1547,7 @@ def create_dataset_from_dsopts(group, dsopts, shape=None, dtype=None, data=None,
         shuffle = False
         
     need_chunks = any([compression,scaleoffset is not None,shuffle])
+    need_chunks = True
         
     # We use user-provided chunks if available
     chunks_directive = dsopts.get('chunks')
@@ -1561,7 +1566,10 @@ def create_dataset_from_dsopts(group, dsopts, shape=None, dtype=None, data=None,
     opts = {'shape': shape,
             'dtype': h5_dtype,
             'compression': compression,
+            #'compression': 'gzip',
+            #'compression_opts': 9,
             'shuffle': shuffle,
+            #'shuffle': True,
             'chunks': chunks}
     
     #try:
@@ -1570,7 +1578,7 @@ def create_dataset_from_dsopts(group, dsopts, shape=None, dtype=None, data=None,
     #except (ImportError,KeyError,AttributeError):
         # filter not available, or an unexpected version of h5py
         # use lossless compression instead
-    opts['compression'] = True
+    #opts['compression'] = True
     #else:
     #    opts['scaleoffset'] = scaleoffset
             
