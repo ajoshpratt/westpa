@@ -84,8 +84,11 @@ class WESimManager:
         self.max_run_walltime = config.get(['west', 'propagation', 'max_run_wallclock'], default=None)
         self.max_total_iterations = config.get(['west', 'propagation', 'max_total_iterations'], default=None)
         # Just a temp fix for reporting storage.
-        import os
-        self.data_refs = os.path.expandvars(config.get(['west', 'data', 'data_refs', 'trajectories'], default=None))
+        try:
+            import os
+            self.data_refs = os.path.expandvars(config.get(['west', 'data', 'data_refs', 'trajectories'], default=None))
+        except:
+            pass
             
     
     def __init__(self, rc=None):        
@@ -511,8 +514,12 @@ class WESimManager:
                 seg.restart = self.data_manager.we_h5file[seg.restart]['trajectories/restart'][seg.parent_id]
                 # From an istate
             except:
-                seg.restart = self.data_manager.we_h5file[seg.restart]['restart'][0]
-                pass
+                try:
+                    seg.restart = self.data_manager.we_h5file[seg.restart]['restart'][0]
+                except:
+                    # We're not storing any restart information.
+                    seg.restart = None
+                    pass
         
         # all futures dispatched for this iteration
         futures = set()        

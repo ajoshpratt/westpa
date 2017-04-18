@@ -80,9 +80,6 @@ def check_pcoord(destobj, single_point, original_pcoord, executable=None, logfil
         error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile))
         error.raise_exception()
 
-    if pcoord[0] == None:
-        error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile))
-        error.raise_exception()
     if single_point:
         expected_shape = (system.pcoord_ndim,)
         if pcoord.ndim == 0:
@@ -91,6 +88,10 @@ def check_pcoord(destobj, single_point, original_pcoord, executable=None, logfil
         expected_shape = (system.pcoord_len, system.pcoord_ndim)
         if pcoord.ndim == 1:
             pcoord.shape = (len(pcoord),1)
+
+    if pcoord[0] == None:
+        error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile))
+        error.raise_exception()
             
     if pcoord.shape != expected_shape:
         if pcoord.shape == (0,1):
@@ -112,7 +113,10 @@ def check_pcoord(destobj, single_point, original_pcoord, executable=None, logfil
        # If we can't check for a NaN, there are problems.
         error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
         error.raise_exception()
-    log.debug('{segment.seg_id} passed the pcoord check.'.format(segment=destobj))
+
+    #log.debug('{segment.seg_id} passed the pcoord check.'.format(segment=destobj))
+    # This has properly shaped it, so.
+    destobj.pcoord = pcoord
 
 
 
@@ -128,7 +132,7 @@ def trajectory_input(fieldname, coord_file, segment, single_point):
                 log.warning('could not read any trajectory data for {}.  Disable trajectory storage in your config file to remove this warning.'.format(fieldname))
                 error.report_general_error_once(error.EMPTY_TRAJECTORY, segment=segment)
         except TypeError as e:
-            print(e)
+            #print(e)
             # We're sending in an empty file.  That's okay for this.
             pass
     #del(data)
@@ -299,6 +303,11 @@ class ExecutablePropagator(WESTPropagator):
         self.basis_state_ref_template   = config['west','data','data_refs','basis_state']
         self.initial_state_ref_template = config['west','data','data_refs','initial_state']
         #self.trajectory_types           = config['west','data','data_refs','trajectory_type'] 
+        # Assume old style.
+        if ('west','data','data_refs','segment') in config:
+            do_restart = False
+        else:
+            do_restart = True
         
         # Load additional environment variables for all child processes
         self.addtl_child_environ.update({k:str(v) for k,v in (config['west','executable','environ'] or {}).iteritems()})
@@ -349,11 +358,12 @@ class ExecutablePropagator(WESTPropagator):
         self.data_info['restart'] =  {'name': 'auxdata/trajectories/restart',
                                     'loader': restart_input,
                                     'delram': True,
-                                    'enabled': True,
+                                    'enabled': do_restart,
                                     'filename': None,
                                     'dtype': h5py.new_vlen(str)}
         dataset_configs = config.get(['west', 'executable', 'datasets']) or []
         for dsinfo in dataset_configs:
+            loader = None
             try:
                 dsname = dsinfo['name']
             except KeyError:
@@ -370,11 +380,13 @@ class ExecutablePropagator(WESTPropagator):
             loader_directive = dsinfo.get('loader')
             if loader_directive:
                 loader = get_object(loader_directive)
-            elif dsname != 'pcoord':
+            elif dsname != 'pcoord' and dsname != 'restart' and dsname != 'trajectory':
                 loader = aux_data_loader
-                
-            dsinfo['loader'] = loader
+            
+            if loader:
+                dsinfo['loader'] = loader
             self.data_info.setdefault(dsname,{}).update(dsinfo)
+            del(loader)
                                                     
         log.debug('data_info: {!r}'.format(self.data_info))
                 
@@ -557,7 +569,8 @@ class ExecutablePropagator(WESTPropagator):
             # If the filesystem is NOT properly clean.
             shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
             os.makedirs(environ['WEST_CURRENT_SEG_DATA_REF'])
-        restart_output(tarball='{}/'.format(environ['WEST_CURRENT_SEG_DATA_REF']), segment=segment)
+        if self.data_info['restart']['enabled']:
+            restart_output(tarball='{}/'.format(environ['WEST_CURRENT_SEG_DATA_REF']), segment=segment)
 
     def cleanup_file_system(self, child_info, segment, environ):
         shutil.rmtree(environ['WEST_CURRENT_SEG_DATA_REF'])
@@ -626,10 +639,14 @@ class ExecutablePropagator(WESTPropagator):
             # Why do we load the pcoord data last?  Because we may well want the restart/trajectory information.
             # And indeed, we should send in the temp directory for the restart information to the pcoord loader
             # so that it has the topology information, if necessary, and the current file thing.
-            cloader = self.data_info['trajectory']['loader']
-            cloader('trajectory', crfname, state, single_point = True)
-            eloader = self.data_info['restart']['loader']
-            eloader('restart', erfname, state, single_point = True)
+            if self.data_info['trajectory']['enabled']:
+                cloader = self.data_info['trajectory']['loader']
+                cloader('trajectory', crfname, state, single_point = True)
+            if self.data_info['restart']['enabled']:
+                eloader = self.data_info['restart']['loader']
+                eloader('restart', erfname, state, single_point = True)
+            else:
+                state.data['trajectories/restart'] = None
             ploader = self.data_info['pcoord']['loader']
             porig = state.pcoord
             ploader('pcoord', prfname, state, single_point = True, trajectory=crfname, restart=erfname)
@@ -639,21 +656,23 @@ class ExecutablePropagator(WESTPropagator):
                 os.unlink(prfname)
             except Exception as e:
                 log.warning('could not delete progress coordinate return file {!r}: {}'.format(prfname, e))
-            try:
-                os.unlink(crfname)
-            except Exception as e:
-                log.warning('could not delete trajectory coordinate return file {!r}: {}'.format(crfname, e))
-            try:
-                shutil.rmtree(erfname)
-            except Exception as e:
-                log.warning('could not delete restart return directory {!r}: {}'.format(erfname, e))
+            if self.data_info['trajectory']['enabled']:
+                try:
+                    os.unlink(crfname)
+                except Exception as e:
+                    log.warning('could not delete trajectory coordinate return file {!r}: {}'.format(crfname, e))
+            if self.data_info['restart']['enabled']:
+                try:
+                    shutil.rmtree(erfname)
+                except Exception as e:
+                    log.warning('could not delete restart return directory {!r}: {}'.format(erfname, e))
                 
     def gen_istate(self, basis_state, initial_state):
         '''Generate a new initial state from the given basis state.'''
         child_info = self.exe_info.get('gen_istate')
         #rc, rusage = self.exec_for_initial_state(child_info, initial_state)
         results = self.exec_for_initial_state(child_info, initial_state)
-        rc, rusage = results[1]
+        rc, rusage, err = results[1]
         if rc != 0:
             log.error('gen_istate executable {!r} returned {}'.format(child_info['executable'], rc))
             initial_state.istate_status = InitialState.ISTATE_STATUS_FAILED
@@ -778,7 +797,10 @@ class ExecutablePropagator(WESTPropagator):
                         # that the pcoord loaders accept *kwargs; nothing else should be necessary.
                         #try:
                         porig = segment.pcoord
-                        loader(dataset, filename, segment, single_point=False, trajectory=return_files['trajectory'], restart=return_files['restart'])
+                        if self.data_info['restart']['enabled']:
+                            loader(dataset, filename, segment, single_point=False, trajectory=return_files['trajectory'], restart=return_files['restart'])
+                        else:
+                            loader(dataset, filename, segment, single_point=False, trajectory=return_files['trajectory'], restart=None)
                         check_pcoord(segment, original_pcoord=porig, single_point=False, executable=child_info['executable'], logfile=child_info['stdout'])
                         #except:
                             # Compatibility for older calls.  If this call doesn't work, the normal error handling should sort it.

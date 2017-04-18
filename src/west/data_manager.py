@@ -845,7 +845,10 @@ class WESTDataManager:
                         #segment.restart = parent_group['auxdata/trajectories']['restart'][segment.parent_id]
                         #segment.restart = parent_group['auxdata/trajectories'].regionref[segment.parent_id]
                         #segment.restart = parent_group['auxdata/trajectories'].ref
-                        segment.restart = parent_group['auxdata'].ref
+                        try:
+                            segment.restart = parent_group['auxdata'].ref
+                        except:
+                            segment.restart = None
                         #segment.we_h5filename = self.we_h5filename
                         #segment.ref_function = _read_only_ref_return_
                         #segment.h5file = self.we_h5file

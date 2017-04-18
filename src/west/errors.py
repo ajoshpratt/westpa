@@ -340,7 +340,7 @@ class WESTErrorReporting:
                 self.reported_errors[error['msg']] = True
 
     def report_error(self, error, **kwargs):
-        sys.tracebacklimit=0
+        #sys.tracebacklimit=0
         self.format_kwargs.update(kwargs)
         # Pull in the ID.
         self.format_kwargs.update(error)
@@ -412,7 +412,7 @@ class WESTErrorReporting:
                 self.report_general_error_once(self.RUNSEG_EMPTY_VARIABLES, empties="\n        ".join(empties))
 
     def report_general_error_once(self, error, **kwargs):
-        sys.tracebacklimit=0
+        #sys.tracebacklimit=0
         # This is a function that respects the 'run only once' setting,
         # but doesn't require extensive iteration.  It's useful for printing a
         # warning a during simulation.
