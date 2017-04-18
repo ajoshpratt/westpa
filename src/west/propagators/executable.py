@@ -32,13 +32,21 @@ from westpa.yamlcfg import check_bool, ConfigItemMissing
 import west
 from west import Segment
 from west.propagators import WESTPropagator
-#from westtools import WESTDataReader
+from west import errors
 from west.data_manager import WESTDataManager
 import tarfile, StringIO, os, io, cStringIO
 import cPickle
 import h5py
 vvoid_dtype = h5py.special_dtype(vlen=str) # Trying to store arbitrary data.  Not working so well...
 
+# We're using functions that want this, so.
+error = errors.WESTErrorReporting(sys.argv[0])
+
+import warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=RuntimeWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
 
 def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point, **kwargs):
     """Read progress coordinate data into the ``pcoord`` field on ``destobj``. 
@@ -51,8 +59,30 @@ def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point, **kw
     
     assert fieldname == 'pcoord'
     
-    pcoord = numpy.loadtxt(pcoord_return_filename, dtype=system.pcoord_dtype)
-    
+    try:
+        pcoord = numpy.loadtxt(pcoord_return_filename, dtype=system.pcoord_dtype)
+    except:
+        # We failed to properly use numpy loadtxt.  This isn't because it's empty, but because it's probably malformed.
+        error.report_segment_error(error.PCOORD_LOADER_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
+        error.raise_exception()
+
+
+    destobj.pcoord = pcoord
+
+def check_pcoord(destobj, single_point, original_pcoord, executable=None, logfile=None, **kwargs):
+    # A function to check whether out pcoord is correctly shaped.
+    system = westpa.rc.get_system_driver()
+
+    # Check if it's none, first.
+    pcoord = destobj.pcoord.copy()
+
+    if numpy.all(pcoord == original_pcoord):
+        error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile))
+        error.raise_exception()
+
+    if pcoord[0] == None:
+        error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile))
+        error.raise_exception()
     if single_point:
         expected_shape = (system.pcoord_ndim,)
         if pcoord.ndim == 0:
@@ -61,10 +91,30 @@ def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point, **kw
         expected_shape = (system.pcoord_len, system.pcoord_ndim)
         if pcoord.ndim == 1:
             pcoord.shape = (len(pcoord),1)
+            
     if pcoord.shape != expected_shape:
-        raise ValueError('progress coordinate data has incorrect shape {!r} [expected {!r}]'.format(pcoord.shape,
-                                                                                                    expected_shape))
-    destobj.pcoord = pcoord
+        if pcoord.shape == (0,1):
+            error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
+            error.raise_exception()
+        elif pcoord.shape == (0,):
+            # Failure on single points.  Typically for istate/bstates.
+            error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile))
+            error.raise_exception()
+        else:
+            error.report_segment_error(error.RUNSEG_SHAPE_ERROR, segment=destobj, shape=pcoord.shape)
+            error.raise_exception()
+    try:
+        if numpy.any(numpy.isnan(pcoord)):
+           # We can't have NaN in the pcoord.  Fail out.
+            error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
+            error.raise_exception()
+    except:
+       # If we can't check for a NaN, there are problems.
+        error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
+        error.raise_exception()
+    log.debug('{segment.seg_id} passed the pcoord check.'.format(segment=destobj))
+
+
 
 def trajectory_input(fieldname, coord_file, segment, single_point):
     # We'll assume it's... for the moment, who cares, just pickle it.
@@ -76,7 +126,9 @@ def trajectory_input(fieldname, coord_file, segment, single_point):
             segment.data['trajectories/{}'.format(fieldname)] = data
             if data.nbytes == 0:
                 log.warning('could not read any trajectory data for {}.  Disable trajectory storage in your config file to remove this warning.'.format(fieldname))
-        except TypeError:
+                error.report_general_error_once(error.EMPTY_TRAJECTORY, segment=segment)
+        except TypeError as e:
+            print(e)
             # We're sending in an empty file.  That's okay for this.
             pass
     #del(data)
@@ -114,10 +166,12 @@ def restart_input(fieldname, coord_file, segment, single_point):
     except:
         pass
     if tarsize > itarsize:
-        log.warning('{fieldname} has a filesize of {tarsize}; this may result in RAM intensive WESTPA runs.'.format(fieldname=fieldname,tarsize=size_format(tarsize)))
+        #log.warning('{fieldname} has a filesize of {tarsize}; this may result in RAM intensive WESTPA runs.'.format(fieldname=fieldname,tarsize=size_format(tarsize)))
+        error.report_general_error_once(error.LARGE_RESTART, segment=segment, size=size_format(tarsize))
     if len(t.getmembers()) <= 1:
-        log.warning('You have not supplied any {} data.  Disable restarts in your config file to remove this warning.'.format(fieldname))
-        del(segment.data['trajectories/{}'.format(fieldname)])
+        #log.warning('You have not supplied any {} data.  Disable restarts in your config file to remove this warning.'.format(fieldname))
+        error.report_general_error_once(error.EMPTY_RESTART, segment=segment)
+        #del(segment.data['trajectories/{}'.format(fieldname)])
     else:
         segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps((d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
     t.close()
@@ -155,7 +209,9 @@ def aux_data_loader(fieldname, data_filename, segment, single_point):
         # We may wish to enable an environment in which everything is handled within python.
         # Ergo, perhaps this shouldn't immediately break; if the field isn't set properly, it'll break
         # down the line when it tries to store the data (which happens half the time anyway).
-        log.warning('could not read any data for {}'.format(fieldname))
+        #log.warning('could not read any data for {}'.format(fieldname))
+        error.report_segment_error(error.RUNSEG_AUX_ERROR, segment=segment, err=error.format_stderr(segment.err))
+        error.raise_exception()
     else:
         segment.data[fieldname] = data
     
@@ -366,17 +422,37 @@ class ExecutablePropagator(WESTPropagator):
             stderr = file(stderr, 'wb') if stderr else sys.stderr
                 
         # close_fds is critical for preventing out-of-file errors
+        from subprocess import PIPE
         proc = subprocess.Popen([executable],
                                 cwd = cwd,
-                                stdin=stdin, stdout=stdout, stderr=stderr if stderr != stdout else subprocess.STDOUT,
+                                #stdin=stdin, stdout=stdout, stderr=stderr if stderr != stdout else subprocess.STDOUT,
+                                stdin=stdin, stdout=PIPE, stderr=PIPE,
                                 close_fds=True, env=all_environ)
 
         # Wait on child and get resource usage
         (_pid, _status, rusage) = os.wait4(proc.pid, 0)
         # Do a subprocess.Popen.wait() to let the Popen instance (and subprocess module) know that
         # we are done with the process, and to get a more friendly return code
-        rc = proc.wait()
-        return (rc, rusage)
+        #rc = proc.wait()
+        #return (rc, rusage)
+        #rc = proc.wait()
+        # While the return code is great, we may want to push more explicit error messages.
+        # let's communicate and duplicate some of the stderr output, and send it on its way.
+        # This may have to happen in the calling function, but whatever.
+        out, err = proc.communicate()
+        # Let's suppress writing this to the main log.  It clutters it up.
+        if stdout != sys.stdout: 
+            stdout.write(error.linebreak + ' STDOUT ' + error.linebreak + '\n\n\n')
+            stdout.write(out)
+            if stderr != stdout:
+                stderr.write('\n\n\n' + error.linebreak + ' STDERR ' + error.linebreak + '\n\n\n')
+                stderr.write(err)
+            else:
+                stdout.write('\n\n\n' + error.linebreak + ' STDERR ' + error.linebreak + '\n\n\n')
+                stdout.write(err)
+        rc = proc.returncode
+        #return (rc, rusage, "\n        ".join(err.splitlines()[-10:]))
+        return (rc, rusage, "\n        ".join(err.splitlines()[-10:]))
     
     def exec_child_from_child_info(self, child_info, template_args, environ):
         for (key, value) in child_info.get('environ', {}).iteritems():
@@ -542,7 +618,8 @@ class ExecutablePropagator(WESTPropagator):
         try:
             #rc, rusage = execfn(child_info, state, addtl_env)
             results = execfn(child_info, state, addtl_env)
-            rc, rusage = results[1]
+            rc, rusage, err = results[1]
+            state.err = err
             if rc != 0:
                 log.error('get_pcoord executable {!r} returned {}'.format(child_info['executable'], rc))
                 
@@ -554,7 +631,9 @@ class ExecutablePropagator(WESTPropagator):
             eloader = self.data_info['restart']['loader']
             eloader('restart', erfname, state, single_point = True)
             ploader = self.data_info['pcoord']['loader']
+            porig = state.pcoord
             ploader('pcoord', prfname, state, single_point = True, trajectory=crfname, restart=erfname)
+            check_pcoord(state, original_pcoord=porig, single_point=True, executable=child_info['executable'], logfile=child_info['stdout'])
         finally:
             try:
                 os.unlink(prfname)
@@ -609,7 +688,7 @@ class ExecutablePropagator(WESTPropagator):
             try:
                 #rc, rusage = self.exec_for_iteration(child_info, n_iter)
                 results = self.exec_for_iteration(child_info, n_iter)
-                rc, rusage = results[1]
+                rc, rusage, err = results[1]
             except OSError as e:
                 log.warning('could not execute post-iteration program {!r}: {}'.format(child_info['executable'], e))
             else:
@@ -657,8 +736,10 @@ class ExecutablePropagator(WESTPropagator):
             # Spawn propagator and wait for its completion
             #used_environ, rc, rusage = self.exec_for_segment(child_info, segment, addtl_env) 
             results = self.exec_for_segment(child_info, segment, addtl_env) 
-            rc, rusage = results[1]
+            rc, rusage, err = results[1]
+            segment.err = err
             run_environ = results[0]
+
             if self.cleanup == True:
                 self.cleanup_file_system(child_info, segment, run_environ)
             
@@ -677,7 +758,6 @@ class ExecutablePropagator(WESTPropagator):
             # We want to load the pcoord last, as we may wish to directly manipulate trajectories.
             # Actually, I take it back.  We want to load the pcoord first such that we may calculate properties
             # on the trajectory while it still exists in the filesystem.
-
             for dataset in self.data_info:
             #for dataset in reversed(self.data_info):
                 # pcoord is always enabled (see __init__)
@@ -686,6 +766,7 @@ class ExecutablePropagator(WESTPropagator):
                 
                 filename = return_files[dataset]
                 loader = self.data_info[dataset]['loader']
+                import traceback
                 try:
                     segment.file_type = self.trajectory_types
                 except:
@@ -695,15 +776,28 @@ class ExecutablePropagator(WESTPropagator):
                         # Yes, I'm considering changing the default behavior.  It's faster to just supply the files directly on disk during propagation,
                         # rather than re-creating temp files just to have it work for a custom pcoord load function.  Really, we just need to make sure
                         # that the pcoord loaders accept *kwargs; nothing else should be necessary.
-                        try:
-                            loader(dataset, filename, segment, single_point=False, trajectory=return_files['trajectory'], restart=return_files['restart'])
-                        except:
+                        #try:
+                        porig = segment.pcoord
+                        loader(dataset, filename, segment, single_point=False, trajectory=return_files['trajectory'], restart=return_files['restart'])
+                        check_pcoord(segment, original_pcoord=porig, single_point=False, executable=child_info['executable'], logfile=child_info['stdout'])
+                        #except:
                             # Compatibility for older calls.  If this call doesn't work, the normal error handling should sort it.
-                            loader(dataset, filename, segment, single_point=False)
+                        #    porig = segment.pcoord
+                        #    loader(dataset, filename, segment, single_point=False)
+                        #    check_pcoord(segment, original_pcoord=porig, single_point=False, executable=child_info['executable'], logfile=child_info['stdout'])
                     else:
                         loader(dataset, filename, segment, single_point=False)
                 except Exception as e:
-                    log.error('could not read {} from {!r}: {!r}'.format(dataset, filename, e))
+                    #print(log.exception(e))
+                    a = traceback.format_exc()
+                    a = a.split('\n')
+                    #print(e, dataset)
+                    #if dataset != 'pcoord':
+                    #    error.report_segment_error(error.RUNSEG_TMP_ERROR, segment=segment, filename=filename, dataset=dataset, e=e)
+                    error.report_segment_error(error.RUNSEG_TMP_ERROR, segment=segment, filename=filename, dataset=dataset, e=e, loader=loader, traceback=a)
+                    #else:
+                    #    error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=segment, filename=filename, dataset=dataset, e=e)
+                    #log.error('could not read {} from {!r}: {!r}'.format(dataset, filename, e))
                     segment.status = Segment.SEG_STATUS_FAILED 
                     break
 

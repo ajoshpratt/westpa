@@ -29,8 +29,11 @@ from west.states import InitialState
 from westpa import extloader
 from west import Segment
 
+from west import errors
+
 from west import wm_ops
 from west.data_manager import weight_dtype
+import sys
 
 from pickle import PickleError
 
@@ -81,7 +84,8 @@ class WESimManager:
         self.max_run_walltime = config.get(['west', 'propagation', 'max_run_wallclock'], default=None)
         self.max_total_iterations = config.get(['west', 'propagation', 'max_total_iterations'], default=None)
         # Just a temp fix for reporting storage.
-        self.data_refs = config.get(['west', 'data', 'data_refs', 'trajectories'], default=None)
+        import os
+        self.data_refs = os.path.expandvars(config.get(['west', 'data', 'data_refs', 'trajectories'], default=None))
             
     
     def __init__(self, rc=None):        
@@ -108,6 +112,8 @@ class WESimManager:
         self.max_run_walltime = None
         self.max_total_iterations = None
         self.process_config()
+
+        self.errors = errors.WESTErrorReporting(sys.argv[0])
                 
         # Per-iteration variables
         self.n_iter = None                  # current iteration
@@ -532,8 +538,9 @@ class WESimManager:
         if self.block_write == None:
             self.block_write = 1
             self.istate_block_write = 1
-        pi.new_operation('Running simulation', len(futures))
-        with pi:
+        #pi.new_operation('Running simulation', len(futures))
+        #with pi:
+        if True:
             while futures:
                 # TODO: add capacity for timeout or SIGINT here
                 future_return = self.work_manager.wait_any_return_done(futures)
@@ -566,7 +573,7 @@ class WESimManager:
                         initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
                         self.we_driver.avail_initial_states[initial_state.state_id] = initial_state
                         new_state_futures.add(initial_state)
-                        pi.progress -= 1
+                        #pi.progress -= 1
                     else:
                         log.error('unknown future {!r} received from work manager'.format(future))
                         raise AssertionError('untracked future {!r}'.format(future))                    
@@ -592,7 +599,7 @@ class WESimManager:
                     # The idea here is to just... see how many we're returning, and just up the amount we process in one block to optimize writes.
                     if float(new_seg_len) / float(self.block_write) > 1.1:
                         self.block_write += self.propagator_block_size
-                    pi.progress +=(new_seg_len)
+                    #pi.progress +=(new_seg_len)
                 new_state_len = 1
                 if len(new_state_futures) >= self.istate_block_write:
                     new_state_len = len(new_state_futures)
@@ -601,13 +608,13 @@ class WESimManager:
                         new_state_futures = set()
                     if float(new_state_len) / float(self.istate_block_write) > 1.1:
                         self.istate_block_write += self.propagator_block_size
-                    pi.progress +=(new_state_len)
+                    #pi.progress +=(new_state_len)
                 #print(new_seg_len, self.block_write, new_state_len, self.istate_block_write, len(futures))
                 if len(futures) == 0:
                     new_istate_futures = self.get_istate_futures()
                     istate_gen_futures.update(new_istate_futures)
                     futures.update(new_istate_futures)
-                    pi.progress -= len(new_istate_futures)
+                    #pi.progress -= len(new_istate_futures)
                 
 
 
@@ -647,9 +654,20 @@ class WESimManager:
         failed_segments = [segment for segment in self.segments.itervalues() if segment.status != Segment.SEG_STATUS_COMPLETE]
         
         if failed_segments:
-            failed_ids = '  \n'.join(str(segment.seg_id) for segment in failed_segments)
-            log.error('propagation failed for {:d} segment(s):\n{}'.format(len(failed_segments), failed_ids))
-            raise PropagationError('propagation failed for {:d} segments'.format(len(failed_segments)))
+            isegment = 0
+            failed_ids = ''
+            padding = int(numpy.floor(numpy.log10(len(failed_segments)))) + 1
+            for segment in failed_segments:
+                if isegment < 10:
+                    failed_ids = failed_ids + str(segment.seg_id).zfill(padding) + ', '
+                    isegment += 1
+                else:
+                    failed_ids = failed_ids + str(segment.seg_id).zfill(padding) + '\n        '
+                    isegment = 0
+            failed_ids = failed_ids[:-2]
+
+            self.errors.report_error(self.errors.RUNSEG_PROP_ERROR, failed_segments=len(failed_segments), failed_ids=failed_ids, iteration=self.n_iter)
+            self.errors.raise_exception()
         else:
             log.debug('propagation complete for iteration {:d}'.format(self.n_iter))
             
