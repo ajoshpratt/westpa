@@ -65,8 +65,8 @@ def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point, **kw
     except:
         # We failed to properly use numpy loadtxt.  This isn't because it's empty, but because it's probably malformed.
         #error.report_segment_error(error.PCOORD_LOADER_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
-        error.report_segment_error(error.LOADTXT_ERROR, dataset=fieldname, segment=destobj, err=error.format_stderr(destobj.err))
-        error.raise_exception()
+        destojb.error = error.report_segment_error(error.LOADTXT_ERROR, dataset=fieldname, segment=destobj, err=error.format_stderr(destobj.err))
+        #error.raise_exception()
 
 
     destobj.pcoord = pcoord
@@ -76,15 +76,15 @@ def check_pcoord(destobj, single_point, original_pcoord, executable=None, logfil
     system = westpa.rc.get_system_driver()
 
     # if it fails here, it's totally screwed up.
-    try:
-        pcoord = destobj.pcoord.copy()
-    else:
-        pcoord = numpy.array(destobj.pcoord)
+    #try:
+    pcoord = destobj.pcoord.copy()
+    #else:
+    #    pcoord = numpy.array(destobj.pcoord)
 
     if numpy.all(pcoord == original_pcoord):
         # Actually, it's not been updated.  We should handle this more appropriately.
-        error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile))
-        error.raise_exception()
+        destobj.error = error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile))
+        #error.raise_exception()
 
     if single_point:
         expected_shape = (system.pcoord_ndim,)
@@ -96,28 +96,28 @@ def check_pcoord(destobj, single_point, original_pcoord, executable=None, logfil
             pcoord.shape = (len(pcoord),1)
 
     if pcoord[0] == None:
-        error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile))
-        error.raise_exception()
+        destobj.error = error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile))
+        #error.raise_exception()
             
     if pcoord.shape != expected_shape:
         if pcoord.shape == (0,1):
-            error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
-            error.raise_exception()
+            destobj.error = error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
+            #error.raise_exception()
         elif pcoord.shape == (0,):
             # Failure on single points.  Typically for istate/bstates.
-            error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile))
-            error.raise_exception()
+            destobj.error = error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile))
+            #error.raise_exception()
         else:
-            error.report_segment_error(error.RUNSEG_SHAPE_ERROR, segment=destobj, shape=pcoord.shape)
-            error.raise_exception()
+            destobj.error = error.report_segment_error(error.RUNSEG_SHAPE_ERROR, segment=destobj, shape=pcoord.shape)
+            #error.raise_exception()
     try:
         if numpy.any(numpy.isnan(pcoord)):
            # We can't have NaN in the pcoord.  Fail out.
-            error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
-            error.raise_exception()
+            destobj.error = error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
+            #error.raise_exception()
     except:
        # If we can't check for a NaN, there are problems.
-        error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
+        destobj.error = error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
         error.raise_exception()
 
     #log.debug('{segment.seg_id} passed the pcoord check.'.format(segment=destobj))
@@ -140,8 +140,8 @@ def trajectory_input(fieldname, coord_file, segment, single_point):
             a = traceback.format_exc()
             a = "\n        ".join(a.splitlines()[:])
             #error.report_general_error_once(error.EMPTY_TRAJECTORY, segment=segment)
-            #error.report_segment_error(error.EMPTY_TRAJECTORY, segment=segment, filename=coord_file, dataset=fieldname, e=e, loader=trajectory_input, traceback=a)
-            error.report_general_error_once(error.EMPTY_TRAJECTORY, segment=segment, filename=coord_file, dataset=fieldname, e=e, loader=trajectory_input, traceback=a, see_wiki=False)
+            segment.error = error.report_segment_error(error.EMPTY_TRAJECTORY, segment=segment, filename=coord_file, dataset=fieldname, e=e, loader=trajectory_input, traceback=a)
+            #error.report_general_error_once(error.EMPTY_TRAJECTORY, segment=segment, filename=coord_file, dataset=fieldname, e=e, loader=trajectory_input, traceback=a, see_wiki=False)
             pass
         #except TypeError as e:
             #print(e)
@@ -183,10 +183,12 @@ def restart_input(fieldname, coord_file, segment, single_point):
         pass
     if tarsize > itarsize:
         #log.warning('{fieldname} has a filesize of {tarsize}; this may result in RAM intensive WESTPA runs.'.format(fieldname=fieldname,tarsize=size_format(tarsize)))
-        error.report_general_error_once(error.LARGE_RESTART, segment=segment, size=size_format(tarsize), see_wiki=False)
+        segment.error = error.report_segment_error(error.LARGE_RESTART, segment=segment, size=size_format(tarsize), see_wiki=False)
+        #error.report_general_error_once(error.LARGE_RESTART, segment=segment, size=size_format(tarsize), see_wiki=False)
     if len(t.getmembers()) <= 1:
         #log.warning('You have not supplied any {} data.  Disable restarts in your config file to remove this warning.'.format(fieldname))
-        error.report_general_error_once(error.EMPTY_RESTART, segment=segment, see_wiki=False)
+        segment.error = error.report_segment_error(error.EMPTY_RESTART, segment=segment, see_wiki=False)
+        #error.report_general_error_once(error.EMPTY_RESTART, segment=segment, see_wiki=False)
         #del(segment.data['trajectories/{}'.format(fieldname)])
     else:
         segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps((d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
@@ -228,7 +230,7 @@ def aux_data_loader(fieldname, data_filename, segment, single_point):
         #log.warning('could not read any data for {}'.format(fieldname))
         #error.report_segment_error(error.RUNSEG_AUX_ERROR, segment=segment, err=error.format_stderr(segment.err), dataset=fieldname)
         #error.report_segment_error(error.RUNSEG_TMP_ERROR, segment=segment, filename=data_filename, dataset=fieldname, e='')
-        error.report_segment_error(error.LOADTXT_ERROR, dataset=fieldname, segment=destobj, err=error.format_stderr(destobj.err))
+        segment.error = error.report_segment_error(error.LOADTXT_ERROR, dataset=fieldname, segment=destobj, err=error.format_stderr(destobj.err))
         error.raise_exception()
     else:
         segment.data[fieldname] = data
@@ -701,7 +703,7 @@ class ExecutablePropagator(WESTPropagator):
             a = traceback.format_exc()
             #a = a.split('\n')
             a = "\n        ".join(a.splitlines()[:])
-            error.report_segment_error(error.ISTATE_ERROR, segment=initial_state, filename='', dataset='pcoord', e=e, loader=self.get_pcoord, traceback=a)
+            initial_state.error = error.report_segment_error(error.ISTATE_ERROR, segment=initial_state, filename='', dataset='pcoord', e=e, loader=self.get_pcoord, traceback=a)
             initial_state.istate_status = InitialState.ISTATE_STATUS_FAILED
             raise
         else:
@@ -785,12 +787,12 @@ class ExecutablePropagator(WESTPropagator):
                 segment.status = Segment.SEG_STATUS_COMPLETE
             elif rc < 0:
                 #log.error('child process for segment %d exited on signal %d (%s)' % (segment.seg_id, -rc, SIGNAL_NAMES[-rc]))
-                error.report_segment_error(error.RUNSEG_SIGNAL_ERROR, segment=segment, err=err, rc=-rc)
+                segment.error = error.report_segment_error(error.RUNSEG_SIGNAL_ERROR, segment=segment, err=err, rc=-rc)
                 segment.status = Segment.SEG_STATUS_FAILED
                 continue
             else:
                 #log.error('child process for segment %d exited with code %d' % (segment.seg_id, rc))
-                error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=segment, err=err, rc=rc)
+                segment.error = error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=segment, err=err, rc=rc)
                 segment.status = Segment.SEG_STATUS_FAILED
                 continue
             
@@ -840,7 +842,7 @@ class ExecutablePropagator(WESTPropagator):
 
                     # We catch this if the error hasn't already been handled.
                     if e.__class__ != error.ErrorHandled:
-                        error.report_segment_error(error.RUNSEG_TMP_ERROR, segment=segment, filename=filename, dataset=dataset, e=e, loader=loader, traceback=a)
+                        segment.error = error.report_segment_error(error.RUNSEG_TMP_ERROR, segment=segment, filename=filename, dataset=dataset, e=e, loader=loader, traceback=a)
                     #else:
                     #    error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=segment, filename=filename, dataset=dataset, e=e)
                     #log.error('could not read {} from {!r}: {!r}'.format(dataset, filename, e))

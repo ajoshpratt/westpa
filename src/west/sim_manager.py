@@ -560,8 +560,24 @@ class WESimManager:
                         segment_futures.remove(future)
                         incoming = future.get_result()
                         self.n_propagated += 1
+
                         
                         for segment in incoming:
+                            try:
+                                if segment.error:
+                                    try:
+                                        if self.errors.reported_errors[segment.error[1]['msg']] == False:
+                                            print(segment.error[0])
+                                            self.errors.reported_errors[segment.error[1]['msg']] = True
+                                    except:
+                                            print(segment.error[0])
+                                            self.errors.reported_errors[segment.error[1]['msg']] = True
+
+                                    
+                                    segment.status = Segment.SEG_STATUS_FAILED
+                            except:
+                                # No error; continue
+                                pass
                             result_futures.add(segment)
                             # We don't want to send this on, actually.  Kill it.
                             # It's huge, and transporting it across threads is expensive.

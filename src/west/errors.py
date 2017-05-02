@@ -290,28 +290,31 @@ class WESTErrorReporting:
         # Often, we repeat many errors and it's a pain.  Sometimes, this is useful information,
         # but most of the time it's just indicative of a general problem.
         # In the typical python fashion, we ask forgiveness, not permission.
-        if self.report_all_errors == False:
-            try:
-                if self.reported_errors[self.REPORT_ONCE] == False:
+        if False:
+            if self.report_all_errors == False:
+                try:
+                    if self.reported_errors[self.REPORT_ONCE] == False:
+                        self.pstatus(self.REPORT_ONCE.format(**self.format_kwargs))
+                        self.reported_errors[self.REPORT_ONCE] = True
+                except:
                     self.pstatus(self.REPORT_ONCE.format(**self.format_kwargs))
                     self.reported_errors[self.REPORT_ONCE] = True
-            except:
-                self.pstatus(self.REPORT_ONCE.format(**self.format_kwargs))
-                self.reported_errors[self.REPORT_ONCE] = True
 
-        try:
-            if self.reported_errors[error['msg']] == False:
+            try:
+                if self.reported_errors[error['msg']] == False:
+                    self.pstatus(self.SEG_ERROR.format(**self.format_kwargs))
+                    self.pstatus(error['msg'].format(**self.format_kwargs))
+                    self.pstatus(self.SEE_WIKI.format(**self.format_kwargs))
+                    if self.report_all_errors == False:
+                        self.reported_errors[error['msg']] = True
+            except:
                 self.pstatus(self.SEG_ERROR.format(**self.format_kwargs))
                 self.pstatus(error['msg'].format(**self.format_kwargs))
                 self.pstatus(self.SEE_WIKI.format(**self.format_kwargs))
                 if self.report_all_errors == False:
                     self.reported_errors[error['msg']] = True
-        except:
-            self.pstatus(self.SEG_ERROR.format(**self.format_kwargs))
-            self.pstatus(error['msg'].format(**self.format_kwargs))
-            self.pstatus(self.SEE_WIKI.format(**self.format_kwargs))
-            if self.report_all_errors == False:
-                self.reported_errors[error['msg']] = True
+        # Instead of the prop reporting it, we'll do it from the sim manager...
+        return (self.SEG_ERROR.format(**self.format_kwargs)+(error['msg'].format(**self.format_kwargs)), error)
 
     def report_error(self, error, **kwargs):
         #sys.tracebacklimit=0
@@ -422,7 +425,7 @@ class WESTErrorReporting:
                 self.reported_errors[error['msg']] = True
 
     class ErrorHandled(Exception):
-        sys.tracebacklimit=0
+        #sys.tracebacklimit=0
         pass
 
     def raise_exception(self):
