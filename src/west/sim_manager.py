@@ -564,14 +564,14 @@ class WESimManager:
                         
                         for segment in incoming:
                             try:
-                                if segment.error:
+                                for error in segment.error:
                                     try:
-                                        if self.errors.reported_errors[segment.error[1]['msg']] == False:
-                                            print(segment.error[0])
-                                            self.errors.reported_errors[segment.error[1]['msg']] = True
+                                        if self.errors.reported_errors[error[1]['msg']] == False:
+                                            print(error[0])
+                                            self.errors.reported_errors[error[1]['msg']] = True
                                     except:
-                                            print(segment.error[0])
-                                            self.errors.reported_errors[segment.error[1]['msg']] = True
+                                            print(error[0])
+                                            self.errors.reported_errors[error[1]['msg']] = True
 
                                     
                                     segment.status = Segment.SEG_STATUS_FAILED
