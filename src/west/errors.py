@@ -84,8 +84,26 @@ class WESTErrorReporting:
         {llinebreak}{linebreak}
         ERROR # {id} ON Iteration: {iteration}"""
 
+        self.RUNSEG_SIGNAL_ERROR = { 'msg': """
+        The {executable} propagator has caught signal {rc}.
+        You should check the indicated log file for more specific errors,
+        or see below.
+
+        FILES TO CHECK
+
+        {logfile}
+        {executable}
+
+
+        LAST {error_lines} LINES OF STDERR
+        {linebreak}
+        {err}
+        {linebreak}
+        """,
+        'id': 'E0' }
+
         self.RUNSEG_GENERAL_ERROR = { 'msg': """
-        A general error has been caught from the {executable} propagator.
+        The {executable} propagator has exited with signal {rc}.
         You should check the indicated log file for more specific errors,
         or see below.
 
@@ -216,9 +234,10 @@ class WESTErrorReporting:
         'id': 'E6' }
 
         self.EMPTY_TRAJECTORY = { 'msg': """
-        The trajectory return for seg_id {segment.seg_id} is empty.  If you're not
+        NONFATAL: The trajectory return for seg_id {segment.seg_id} is empty.  If you're not
         storing trajectory data for this WESTPA run, please disable the trajectory
         return in {rcfile}.  Otherwise, ensure that $WEST_TRAJECTORY_RETURN is not empty.
+        If you mean to store this data, check that your run was successful.
 
         FILES/FUNCTIONS TO CHECK
 
@@ -462,6 +481,7 @@ class WESTErrorReporting:
                 self.reported_errors[error['msg']] = True
 
     class ErrorHandled(Exception):
+        sys.tracebacklimit=0
         pass
 
     def raise_exception(self):

@@ -451,7 +451,7 @@ class ExecutablePropagator(WESTPropagator):
                                 close_fds=True, env=all_environ)
 
         # Wait on child and get resource usage
-        (_pid, _status, rusage) = os.wait4(proc.pid, 0)
+        (_pid, _status, rusage) = os.wait4(proc.pid, 1)
         # Do a subprocess.Popen.wait() to let the Popen instance (and subprocess module) know that
         # we are done with the process, and to get a more friendly return code
         #rc = proc.wait()
@@ -778,11 +778,13 @@ class ExecutablePropagator(WESTPropagator):
             if rc == 0:
                 segment.status = Segment.SEG_STATUS_COMPLETE
             elif rc < 0:
-                log.error('child process for segment %d exited on signal %d (%s)' % (segment.seg_id, -rc, SIGNAL_NAMES[-rc]))
+                #log.error('child process for segment %d exited on signal %d (%s)' % (segment.seg_id, -rc, SIGNAL_NAMES[-rc]))
+                error.report_segment_error(error.RUNSEG_SIGNAL_ERROR, segment=segment, err=err, rc=-rc)
                 segment.status = Segment.SEG_STATUS_FAILED
                 continue
             else:
-                log.error('child process for segment %d exited with code %d' % (segment.seg_id, rc))
+                #log.error('child process for segment %d exited with code %d' % (segment.seg_id, rc))
+                error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=segment, err=err, rc=rc)
                 segment.status = Segment.SEG_STATUS_FAILED
                 continue
             
