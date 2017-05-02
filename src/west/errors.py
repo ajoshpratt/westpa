@@ -227,7 +227,7 @@ class WESTErrorReporting:
         {rcfile}
 
         """,
-        'id': 'E6' }
+        'id': 'E7' }
 
         self.EMPTY_RESTART = { 'msg': """
         The restart return for seg_id {segment.seg_id} is empty.  If you're not
@@ -241,7 +241,7 @@ class WESTErrorReporting:
         {rcfile}
 
         """,
-        'id': 'E7' }
+        'id': 'E8' }
 
         self.LARGE_RESTART = { 'msg': """
         The restart return for seg_id {segment.seg_id} is {size}.  This is likely to
@@ -252,7 +252,23 @@ class WESTErrorReporting:
         {executable}
 
         """,
-        'id': 'E8' }
+        'id': 'E9' }
+
+        self.ISTATE_ERROR = { 'msg': """
+        ISTATE GENERATION FAILURE: Could not read the {dataset} return value istate {segment.seg_id} in iteration {segment.n_iter}.
+
+        This is typically due to a failure to return the progress coordinate for istates/bstates.  Check the appropriate function.
+
+        Specific exception:
+
+        {linebreak}
+        {loader.__module__}.{loader.func_name}:
+        {e}
+
+        {traceback}
+        {linebreak}
+        """,
+        'id': 'E10' }
 
         self.WRUN_INTERRUPTED = { 'msg': """
         INTERRUPTION

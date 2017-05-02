@@ -37,6 +37,7 @@ from west.data_manager import WESTDataManager
 import tarfile, StringIO, os, io, cStringIO
 import cPickle
 import h5py
+import traceback
 vvoid_dtype = h5py.special_dtype(vlen=str) # Trying to store arbitrary data.  Not working so well...
 
 # We're using functions that want this, so.
@@ -74,6 +75,9 @@ def check_pcoord(destobj, single_point, original_pcoord, executable=None, logfil
     system = westpa.rc.get_system_driver()
 
     # Check if it's none, first.
+    #if type(destobj.pcoord) == int:
+    #    pcoord = numpy.array([destobj.pcoord])
+    #else:
     pcoord = destobj.pcoord.copy()
 
     if numpy.all(pcoord == original_pcoord):
@@ -128,13 +132,18 @@ def trajectory_input(fieldname, coord_file, segment, single_point):
         try:
             data = numpy.void(file.read())
             segment.data['trajectories/{}'.format(fieldname)] = data
-            if data.nbytes == 0:
-                log.warning('could not read any trajectory data for {}.  Disable trajectory storage in your config file to remove this warning.'.format(fieldname))
-                error.report_general_error_once(error.EMPTY_TRAJECTORY, segment=segment)
-        except TypeError as e:
+        except Exception as e:
+        #if data.nbytes == 0:
+            #log.warning('could not read any trajectory data for {}.  Disable trajectory storage in your config file to remove this warning.'.format(fieldname))
+            a = traceback.format_exc()
+            a = "\n        ".join(a.splitlines()[:])
+            #error.report_general_error_once(error.EMPTY_TRAJECTORY, segment=segment)
+            error.report_segment_error(error.EMPTY_TRAJECTORY, segment=segment, filename=coord_file, dataset=fieldname, e=e, loader=trajectory_input, traceback=a)
+            pass
+        #except TypeError as e:
             #print(e)
             # We're sending in an empty file.  That's okay for this.
-            pass
+        #    pass
     #del(data)
 
 def size_format(filesize, n=0):
@@ -681,8 +690,12 @@ class ExecutablePropagator(WESTPropagator):
         # Determine and load the progress coordinate value for this state
         try:
             self.get_pcoord(initial_state)
-        except:
-            log.exception('could not get progress coordinate for initial state {!r}'.format(initial_state))
+        except Exception as e:
+            #log.exception('could not get progress coordinate for initial state {!r}'.format(initial_state))
+            a = traceback.format_exc()
+            #a = a.split('\n')
+            a = "\n        ".join(a.splitlines()[:])
+            error.report_segment_error(error.ISTATE_ERROR, segment=initial_state, filename='', dataset='pcoord', e=e, loader=self.get_pcoord, traceback=a)
             initial_state.istate_status = InitialState.ISTATE_STATUS_FAILED
             raise
         else:
@@ -777,15 +790,14 @@ class ExecutablePropagator(WESTPropagator):
             # We want to load the pcoord last, as we may wish to directly manipulate trajectories.
             # Actually, I take it back.  We want to load the pcoord first such that we may calculate properties
             # on the trajectory while it still exists in the filesystem.
-            for dataset in self.data_info:
-            #for dataset in reversed(self.data_info):
+            #for dataset in self.data_info:
+            for dataset in reversed(self.data_info):
                 # pcoord is always enabled (see __init__)
                 if not self.data_info[dataset].get('enabled',False):
                     continue
                 
                 filename = return_files[dataset]
                 loader = self.data_info[dataset]['loader']
-                import traceback
                 try:
                     segment.file_type = self.trajectory_types
                 except:
