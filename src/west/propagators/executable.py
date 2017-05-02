@@ -64,7 +64,8 @@ def pcoord_loader(fieldname, pcoord_return_filename, destobj, single_point, **kw
         pcoord = numpy.loadtxt(pcoord_return_filename, dtype=system.pcoord_dtype)
     except:
         # We failed to properly use numpy loadtxt.  This isn't because it's empty, but because it's probably malformed.
-        error.report_segment_error(error.PCOORD_LOADER_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
+        #error.report_segment_error(error.PCOORD_LOADER_ERROR, segment=destobj, err=error.format_stderr(destobj.err))
+        error.report_segment_error(error.LOADTXT_ERROR, dataset=fieldname, segment=destobj, err=error.format_stderr(destobj.err))
         error.raise_exception()
 
 
@@ -74,13 +75,14 @@ def check_pcoord(destobj, single_point, original_pcoord, executable=None, logfil
     # A function to check whether out pcoord is correctly shaped.
     system = westpa.rc.get_system_driver()
 
-    # Check if it's none, first.
-    #if type(destobj.pcoord) == int:
-    #    pcoord = numpy.array([destobj.pcoord])
-    #else:
-    pcoord = destobj.pcoord.copy()
+    # if it fails here, it's totally screwed up.
+    try:
+        pcoord = destobj.pcoord.copy()
+    else:
+        pcoord = numpy.array(destobj.pcoord)
 
     if numpy.all(pcoord == original_pcoord):
+        # Actually, it's not been updated.  We should handle this more appropriately.
         error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile))
         error.raise_exception()
 
@@ -138,7 +140,8 @@ def trajectory_input(fieldname, coord_file, segment, single_point):
             a = traceback.format_exc()
             a = "\n        ".join(a.splitlines()[:])
             #error.report_general_error_once(error.EMPTY_TRAJECTORY, segment=segment)
-            error.report_segment_error(error.EMPTY_TRAJECTORY, segment=segment, filename=coord_file, dataset=fieldname, e=e, loader=trajectory_input, traceback=a)
+            #error.report_segment_error(error.EMPTY_TRAJECTORY, segment=segment, filename=coord_file, dataset=fieldname, e=e, loader=trajectory_input, traceback=a)
+            error.report_general_error_once(error.EMPTY_TRAJECTORY, segment=segment, filename=coord_file, dataset=fieldname, e=e, loader=trajectory_input, traceback=a, see_wiki=False)
             pass
         #except TypeError as e:
             #print(e)
@@ -180,10 +183,10 @@ def restart_input(fieldname, coord_file, segment, single_point):
         pass
     if tarsize > itarsize:
         #log.warning('{fieldname} has a filesize of {tarsize}; this may result in RAM intensive WESTPA runs.'.format(fieldname=fieldname,tarsize=size_format(tarsize)))
-        error.report_general_error_once(error.LARGE_RESTART, segment=segment, size=size_format(tarsize))
+        error.report_general_error_once(error.LARGE_RESTART, segment=segment, size=size_format(tarsize), see_wiki=False)
     if len(t.getmembers()) <= 1:
         #log.warning('You have not supplied any {} data.  Disable restarts in your config file to remove this warning.'.format(fieldname))
-        error.report_general_error_once(error.EMPTY_RESTART, segment=segment)
+        error.report_general_error_once(error.EMPTY_RESTART, segment=segment, see_wiki=False)
         #del(segment.data['trajectories/{}'.format(fieldname)])
     else:
         segment.data['trajectories/{}'.format(fieldname)] = numpy.array(cPickle.dumps((d.getvalue()), protocol=0).encode('base64'), dtype=vvoid_dtype)
@@ -223,7 +226,9 @@ def aux_data_loader(fieldname, data_filename, segment, single_point):
         # Ergo, perhaps this shouldn't immediately break; if the field isn't set properly, it'll break
         # down the line when it tries to store the data (which happens half the time anyway).
         #log.warning('could not read any data for {}'.format(fieldname))
-        error.report_segment_error(error.RUNSEG_AUX_ERROR, segment=segment, err=error.format_stderr(segment.err))
+        #error.report_segment_error(error.RUNSEG_AUX_ERROR, segment=segment, err=error.format_stderr(segment.err), dataset=fieldname)
+        #error.report_segment_error(error.RUNSEG_TMP_ERROR, segment=segment, filename=data_filename, dataset=fieldname, e='')
+        error.report_segment_error(error.LOADTXT_ERROR, dataset=fieldname, segment=destobj, err=error.format_stderr(destobj.err))
         error.raise_exception()
     else:
         segment.data[fieldname] = data
@@ -451,7 +456,8 @@ class ExecutablePropagator(WESTPropagator):
                                 close_fds=True, env=all_environ)
 
         # Wait on child and get resource usage
-        (_pid, _status, rusage) = os.wait4(proc.pid, 1)
+        # Oddly, we never fail with 0 as the integer option.  Need to look into this more.
+        (_pid, _status, rusage) = os.wait4(proc.pid, 0)
         # Do a subprocess.Popen.wait() to let the Popen instance (and subprocess module) know that
         # we are done with the process, and to get a more friendly return code
         #rc = proc.wait()

@@ -86,14 +86,11 @@ class WESTErrorReporting:
 
         self.RUNSEG_SIGNAL_ERROR = { 'msg': """
         The {executable} propagator has caught signal {rc}.
-        You should check the indicated log file for more specific errors,
-        or see below.
 
         FILES TO CHECK
 
         {logfile}
         {executable}
-
 
         LAST {error_lines} LINES OF STDERR
         {linebreak}
@@ -104,14 +101,11 @@ class WESTErrorReporting:
 
         self.RUNSEG_GENERAL_ERROR = { 'msg': """
         The {executable} propagator has exited with signal {rc}.
-        You should check the indicated log file for more specific errors,
-        or see below.
 
         FILES TO CHECK
 
         {logfile}
         {executable}
-
 
         LAST {error_lines} LINES OF STDERR
         {linebreak}
@@ -140,24 +134,15 @@ class WESTErrorReporting:
         self.RUNSEG_TMP_ERROR = { 'msg': """
         Could not read the {dataset} return value from {filename} for segment {segment.seg_id} in iteration {segment.n_iter}.
 
-        POSSIBLE REASONS
-
-        {executable} is not returning anything into the {dataset} return.
-            - This could be the result of a failed run, or
-            - {executable} is not returning data into the {dataset} return
-              (typically, cat/paste into the WEST_DATASET_RETURN variable)
-        {filename} is not writable.
-            - The space {filename} exists on could be full.  Try cleaning it.
-        {loader.__module__}.{loader.func_name} is throwing an error.
-
-        FILES TO CHECK
+        FILES/FUNCTIONS TO CHECK
 
         {logfile}
         {executable}
+        {loader.__module__}.{loader.func_name}
         {rcfile} - did you want to return this dataset?
+        {filename} - is this location writable?
 
         Specific exception:
-
         {linebreak}
         {loader.__module__}.{loader.func_name}:
         {e}
@@ -166,25 +151,6 @@ class WESTErrorReporting:
         {linebreak}
         """,
         'id': 'E2' }
-
-        self.RUNSEG_AUX_ERROR = { 'msg': """
-        Your auxiliary data return is empty.  If the simulation fails,
-        ensure that you're returning the auxiliary data properly and
-        that the {executable} propagator is error-free.  If the simulation
-        does not fail, disable the return option in {rcfile}.
-        Check the indicated log file for more specific errors:
-
-        FILES TO CHECK
-        {linebreak}
-        {logfile}
-
-        LAST 10 LINES OF STDERR
-        {linebreak}
-        {err}
-        {linebreak}
-
-        """,
-        'id': 'E3' }
 
         self.RUNSEG_PROP_ERROR = { 'msg': """
         Propagation has failed for {failed_segments} segments:
@@ -197,9 +163,7 @@ class WESTErrorReporting:
         'id': 'E4' }
 
         self.EMPTY_PCOORD_ERROR = { 'msg': """
-        The pcoord dataset on seg_id {segment.seg_id} is empty.  Check your 
-        {executable} propagator, the indicated log file, or any custom pcoord loader function
-        for more information.
+        The pcoord dataset on seg_id {segment.seg_id} is empty.
 
         FILES/FUNCTIONS TO CHECK
 
@@ -214,11 +178,8 @@ class WESTErrorReporting:
         """,
         'id': 'E5' }
 
-        self.PCOORD_LOADER_ERROR = { 'msg': """
-        The pcoord dataset on seg_id {segment.seg_id} is unable to be loaded via
-        numpy.loadtxt().  Check the indicated log file for more information, and 
-        the {executable} propagator to ensure that the data you are returning is 
-        suitable for numpy.loadtxt().
+        self.LOADTXT_ERROR = { 'msg': """
+        The {dataset} on seg_id {segment.seg_id} is unable to be loaded via numpy.loadtxt(). 
 
         FILES/FUNCTIONS TO CHECK
 
@@ -234,32 +195,13 @@ class WESTErrorReporting:
         'id': 'E6' }
 
         self.EMPTY_TRAJECTORY = { 'msg': """
-        NONFATAL: The trajectory return for seg_id {segment.seg_id} is empty.  If you're not
-        storing trajectory data for this WESTPA run, please disable the trajectory
-        return in {rcfile}.  Otherwise, ensure that $WEST_TRAJECTORY_RETURN is not empty.
-        If you mean to store this data, check that your run was successful.
-
-        FILES/FUNCTIONS TO CHECK
-
-        {logfile}
-        {executable}
-        {rcfile}
-
-        """,
+        The trajectory return for seg_id {segment.seg_id} is empty.
+        Ensure that $WEST_TRAJECTORY_RETURN is not empty, or disable trajectory return in {rcfile}.""",
         'id': 'E7' }
 
         self.EMPTY_RESTART = { 'msg': """
-        The restart return for seg_id {segment.seg_id} is empty.  If you're not
-        storing restart data for this WESTPA run, please disable the restart
-        return in {rcfile}.  Otherwise, ensure that $WEST_RESTART_RETURN is not empty.
-
-        FILES/FUNCTIONS TO CHECK
-
-        {logfile}
-        {executable}
-        {rcfile}
-
-        """,
+        The restart return for seg_id {segment.seg_id} is empty.
+        Ensure that $WEST_RESTART_RETURN is not empty, or disable the restart return in {rcfile}.""",
         'id': 'E8' }
 
         self.LARGE_RESTART = { 'msg': """
@@ -275,8 +217,6 @@ class WESTErrorReporting:
 
         self.ISTATE_ERROR = { 'msg': """
         ISTATE GENERATION FAILURE: Could not read the {dataset} return value istate {segment.seg_id} in iteration {segment.n_iter}.
-
-        This is typically due to a failure to return the progress coordinate for istates/bstates.  Check the appropriate function.
 
         Specific exception:
 
@@ -311,11 +251,10 @@ class WESTErrorReporting:
         'id': 'E99' }
 
         self.REPORT_ONCE = """
-        NOTICE
+        {llinebreak}{linebreak}
 
         The configuration has been set such that each error type is caught only once; all other
-        segments which report the same error will have their output suppressed.  This can be disabled.
-        """
+        segments which report the same error will have their output suppressed.  This can be disabled."""
 
         self.SEE_WIKI = """
         Check the wiki for more information
@@ -446,7 +385,7 @@ class WESTErrorReporting:
                 stderr.write("\n".join(empties))
                 self.report_general_error_once(self.RUNSEG_EMPTY_VARIABLES, empties="\n        ".join(empties))
 
-    def report_general_error_once(self, error, **kwargs):
+    def report_general_error_once(self, error, see_wiki=True, **kwargs):
         #sys.tracebacklimit=0
         # This is a function that respects the 'run only once' setting,
         # but doesn't require extensive iteration.  It's useful for printing a
@@ -471,12 +410,14 @@ class WESTErrorReporting:
         try:
             if self.reported_errors[error['msg']] == False:
                 self.pstatus(error['msg'].format(**self.format_kwargs))
-                self.pstatus(self.SEE_WIKI.format(**self.format_kwargs))
+                if see_wiki:
+                    self.pstatus(self.SEE_WIKI.format(**self.format_kwargs))
                 if self.report_all_errors == False:
                     self.reported_errors[error['msg']] = True
         except:
             self.pstatus(error['msg'].format(**self.format_kwargs))
-            self.pstatus(self.SEE_WIKI.format(**self.format_kwargs))
+            if see_wiki:
+                self.pstatus(self.SEE_WIKI.format(**self.format_kwargs))
             if self.report_all_errors == False:
                 self.reported_errors[error['msg']] = True
 
