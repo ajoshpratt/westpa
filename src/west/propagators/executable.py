@@ -84,6 +84,7 @@ def check_pcoord(destobj, single_point, original_pcoord, executable=None, logfil
     if numpy.all(pcoord == original_pcoord):
         # Actually, it's not been updated.  We should handle this more appropriately.
         destobj.error.append(error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile)))
+        destobj.status = Segment.SEG_STATUS_FAILED
         #error.raise_exception()
 
     if single_point:
@@ -97,28 +98,35 @@ def check_pcoord(destobj, single_point, original_pcoord, executable=None, logfil
 
     if pcoord[0] == None:
         destobj.error.append(error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile)))
+        destobj.status = Segment.SEG_STATUS_FAILED
         #error.raise_exception()
             
     if pcoord.shape != expected_shape:
         if pcoord.shape == (0,1):
-            destobj.error.append(error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err)))
+            destobj.error.append(error.report_segment_error(error.RUNSEG_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), pcoord=pcoord))
+            destobj.status = Segment.SEG_STATUS_FAILED
             #error.raise_exception()
         elif pcoord.shape == (0,):
             # Failure on single points.  Typically for istate/bstates.
-            destobj.error.append(error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile)))
+            destobj.error.append(error.report_segment_error(error.RUNSEG_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), executable=os.path.expandvars(executable), logfile=os.path.expandvars(logfile), pcoord=pcoord))
+            destobj.status = Segment.SEG_STATUS_FAILED
             #error.raise_exception()
         else:
-            destobj.error.append(error.report_segment_error(error.RUNSEG_SHAPE_ERROR, segment=destobj, shape=pcoord.shape))
+            destobj.error.append(error.report_segment_error(error.RUNSEG_SHAPE_ERROR, segment=destobj, shape=pcoord.shape, pcoord=pcoord))
+            destobj.status = Segment.SEG_STATUS_FAILED
             #error.raise_exception()
     try:
         if numpy.any(numpy.isnan(pcoord)):
            # We can't have NaN in the pcoord.  Fail out.
-            destobj.error.append(error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err)))
+            destobj.error.append(error.report_segment_error(error.RUNSEG_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), pcoord=pcoord))
+            destobj.status = Segment.SEG_STATUS_FAILED
             #error.raise_exception()
     except:
        # If we can't check for a NaN, there are problems.
-        destobj.error.append(error.report_segment_error(error.RUNSEG_GENERAL_ERROR, segment=destobj, err=error.format_stderr(destobj.err)))
-        error.raise_exception()
+        destobj.error.append(error.report_segment_error(error.RUNSEG_PCOORD_ERROR, segment=destobj, err=error.format_stderr(destobj.err), pcoord=pcoord))
+        destobj.status = Segment.SEG_STATUS_FAILED
+        #error.raise_exception()
+        #destobj.status = SEG_STATUS_FAILED
 
     #log.debug('{segment.seg_id} passed the pcoord check.'.format(segment=destobj))
     # This has properly shaped it, so.
@@ -622,6 +630,7 @@ class ExecutablePropagator(WESTPropagator):
         
         template_args, environ = {}, {}
         state.error = []
+        state.status = None
         
         if isinstance(state, BasisState):
             execfn = self.exec_for_basis_state
@@ -667,7 +676,15 @@ class ExecutablePropagator(WESTPropagator):
                 state.data['trajectories/restart'] = None
             ploader = self.data_info['pcoord']['loader']
             porig = state.pcoord
-            ploader('pcoord', prfname, state, single_point = True, trajectory=crfname, restart=erfname)
+            try:
+                ploader('pcoord', prfname, state, single_point = True, trajectory=crfname, restart=erfname)
+                state.status = Segment.SEG_STATUS_COMPLETE
+            except Exception as e:
+                a = traceback.format_exc()
+                a = "\n        ".join(a.splitlines()[:])
+                #error.report_general_error_once(error.EMPTY_TRAJECTORY, segment=segment)
+                state.error.append(error.report_segment_error(error.EMPTY_TRAJECTORY, segment=state, filename=prfname, dataset='pcoord', e=e, loader=ploader, traceback=a))
+                state.status = Segment.SEG_STATUS_FAILED
             check_pcoord(state, original_pcoord=porig, single_point=True, executable=child_info['executable'], logfile=child_info['stdout'])
         finally:
             try:

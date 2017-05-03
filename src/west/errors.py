@@ -114,6 +114,26 @@ class WESTErrorReporting:
         """,
         'id': 'E0' }
 
+        self.RUNSEG_PCOORD_ERROR = { 'msg': """
+        pcoord for {segment.seg_id} in iteration {segment.n_iter} has invalid values.
+        
+        PCOORD
+        {linebreak}
+        {pcoord[0]}
+        {linebreak}
+
+        FILES TO CHECK
+
+        {logfile}
+        {executable}
+
+        LAST {error_lines} LINES OF STDERR
+        {linebreak}
+        {err}
+        {linebreak}
+        """,
+        'id': 'E0' }
+
         self.RUNSEG_SHAPE_ERROR = { 'msg': """
         The shape of your progress coordinate return value is {shape},
         which is different from what is specified in your {rcfile}: ({pcoord_len}, {pcoord_ndim}).  

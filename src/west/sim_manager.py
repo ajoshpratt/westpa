@@ -233,6 +233,21 @@ class WESimManager:
         fmap = {future: i for (i, future) in enumerate(futures)}
         for future in self.work_manager.as_completed(futures): 
             result = future.get_result()
+            try:
+                for error in result.error:
+                    try:
+                        if self.errors.reported_errors[error[1]['msg']] == False:
+                            self.rc.pstatus(error[0])
+                            self.errors.reported_errors[error[1]['msg']] = True
+                    except:
+                            self.rc.pstatus(error[0])
+                            self.errors.reported_errors[error[1]['msg']] = True
+
+            except:
+                # No error; continue
+                pass
+            if result.status != Segment.SEG_STATUS_COMPLETE:
+                self.errors.raise_exception()
             basis_states[fmap[future]].pcoord = result.pcoord
             basis_states[fmap[future]].data = result.data
         
@@ -567,14 +582,14 @@ class WESimManager:
                                 for error in segment.error:
                                     try:
                                         if self.errors.reported_errors[error[1]['msg']] == False:
-                                            print(error[0])
+                                            self.rc.pstatus(error[0])
                                             self.errors.reported_errors[error[1]['msg']] = True
                                     except:
-                                            print(error[0])
+                                            self.rc.pstatus(error[0])
                                             self.errors.reported_errors[error[1]['msg']] = True
 
                                     
-                                    segment.status = Segment.SEG_STATUS_FAILED
+                                    #segment.status = Segment.SEG_STATUS_FAILED
                             except:
                                 # No error; continue
                                 pass
@@ -592,6 +607,23 @@ class WESimManager:
                     elif future in istate_gen_futures:
                         istate_gen_futures.remove(future)
                         _basis_state, initial_state = future.get_result()
+                        try:
+                            for error in initial_state.error:
+                                try:
+                                    if self.errors.reported_errors[error[1]['msg']] == False:
+                                        self.rc.pstatus(error[0])
+                                        self.errors.reported_errors[error[1]['msg']] = True
+                                except:
+                                        self.rc.pstatus(error[0])
+                                        self.errors.reported_errors[error[1]['msg']] = True
+
+                                
+                                #segment.status = Segment.SEG_STATUS_FAILED
+                        except:
+                            # No error; continue
+                            pass
+                        if initial_state.status != Segment.SEG_STATUS_COMPLETE:
+                            self.errors.raise_exception()
                         log.debug('received newly-prepared initial state {!r}'.format(initial_state))
                         initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
                         self.we_driver.avail_initial_states[initial_state.state_id] = initial_state
