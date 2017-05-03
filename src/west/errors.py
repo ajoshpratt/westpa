@@ -216,12 +216,16 @@ class WESTErrorReporting:
 
         self.EMPTY_TRAJECTORY = { 'msg': """
         The trajectory return for seg_id {segment.seg_id} is empty.
-        Ensure that $WEST_TRAJECTORY_RETURN is not empty, or disable trajectory return in {rcfile}.""",
+        Ensure that $WEST_TRAJECTORY_RETURN is not empty, or disable trajectory return in {rcfile}.
+        {llinebreak}{linebreak}
+        """,
         'id': 'E7' }
 
         self.EMPTY_RESTART = { 'msg': """
         The restart return for seg_id {segment.seg_id} is empty.
-        Ensure that $WEST_RESTART_RETURN is not empty, or disable the restart return in {rcfile}.""",
+        Ensure that $WEST_RESTART_RETURN is not empty, or disable the restart return in {rcfile}.
+        {llinebreak}{linebreak}
+        """,
         'id': 'E8' }
 
         self.LARGE_RESTART = { 'msg': """
