@@ -35,13 +35,16 @@ class BasisState:
     :ivar auxref:       A user-provided (string) reference for locating data associated
                         with this state (usually a filesystem path).
     '''
-    def __init__(self, label, probability, pcoord=None, auxref=None, state_id=None, data=None):
+    def __init__(self, label, probability, pcoord=None, auxref=None, state_id=None, data=None,
+                 status = None, error = None):
         self.label = label
         self.probability = probability         
         self.pcoord = numpy.atleast_1d(pcoord)
         self.data = data if data is not None else {}
         self.auxref = auxref 
         self.state_id = state_id
+        self.status = status if status else None
+        self.error = error if error else []
         
     def __repr__(self): 
         return ('{} state_id={self.state_id!r} label={self.label!r} prob={self.probability!r} pcoord={self.pcoord!r}>'
@@ -164,7 +167,7 @@ class InitialState:
                  istate_type=None, istate_status=None,
                  pcoord=None, 
                  basis_state=None,
-                 data=None):
+                 data=None, status=None, error=None):
         self.state_id = state_id
         self.basis_state_id = basis_state_id
         self.basis_state=basis_state
@@ -174,6 +177,8 @@ class InitialState:
         self.iter_used = iter_used         
         self.pcoord = numpy.atleast_1d(pcoord)
         self.data = data if data is not None else {}
+        self.status = status if status else None
+        self.error = error if error else []
         
     def __repr__(self): 
         return ('{} state_id={self.state_id!r} istate_type={self.istate_type!r} basis_state_id={self.basis_state_id!r} iter_created={self.iter_created!r} pcoord={self.pcoord!r}>'

@@ -578,21 +578,16 @@ class WESimManager:
 
                         
                         for segment in incoming:
-                            try:
-                                for error in segment.error:
-                                    try:
-                                        if self.errors.reported_errors[error[1]['msg']] == False:
-                                            self.rc.pstatus(error[0])
-                                            self.errors.reported_errors[error[1]['msg']] = True
-                                    except:
-                                            self.rc.pstatus(error[0])
-                                            self.errors.reported_errors[error[1]['msg']] = True
-
-                                    
-                                    #segment.status = Segment.SEG_STATUS_FAILED
-                            except:
-                                # No error; continue
-                                pass
+                            # This always exists, now.
+                            # But if we don't have errors, well, we just carry on.
+                            for error in segment.error:
+                                try:
+                                    if self.errors.reported_errors[error[1]['msg']] == False:
+                                        self.rc.pstatus(error[0])
+                                        self.errors.reported_errors[error[1]['msg']] = True
+                                except:
+                                        self.rc.pstatus(error[0])
+                                        self.errors.reported_errors[error[1]['msg']] = True
                             result_futures.add(segment)
                             # We don't want to send this on, actually.  Kill it.
                             # It's huge, and transporting it across threads is expensive.
@@ -607,21 +602,15 @@ class WESimManager:
                     elif future in istate_gen_futures:
                         istate_gen_futures.remove(future)
                         _basis_state, initial_state = future.get_result()
-                        try:
-                            for error in initial_state.error:
-                                try:
-                                    if self.errors.reported_errors[error[1]['msg']] == False:
-                                        self.rc.pstatus(error[0])
-                                        self.errors.reported_errors[error[1]['msg']] = True
-                                except:
-                                        self.rc.pstatus(error[0])
-                                        self.errors.reported_errors[error[1]['msg']] = True
-
-                                
-                                #segment.status = Segment.SEG_STATUS_FAILED
-                        except:
-                            # No error; continue
-                            pass
+                        for error in initial_state.error:
+                            try:
+                                if self.errors.reported_errors[error[1]['msg']] == False:
+                                    self.rc.pstatus(error[0])
+                                    self.errors.reported_errors[error[1]['msg']] = True
+                            except:
+                                    self.rc.pstatus(error[0])
+                                    self.errors.reported_errors[error[1]['msg']] = True
+                        # We don't really have any mechanism to handle istate failure, so just stop the simulation.
                         if initial_state.status != Segment.SEG_STATUS_COMPLETE:
                             self.errors.raise_exception()
                         log.debug('received newly-prepared initial state {!r}'.format(initial_state))

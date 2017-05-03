@@ -629,8 +629,8 @@ class ExecutablePropagator(WESTPropagator):
         '''Get the progress coordinate of the given basis or initial state.'''
         
         template_args, environ = {}, {}
-        state.error = []
-        state.status = None
+        #state.error = []
+        #state.status = None
         
         if isinstance(state, BasisState):
             execfn = self.exec_for_basis_state
@@ -721,7 +721,7 @@ class ExecutablePropagator(WESTPropagator):
             a = traceback.format_exc()
             #a = a.split('\n')
             a = "\n        ".join(a.splitlines()[:])
-            initial_state.error = []
+            #initial_state.error = []
             initial_state.error.append(error.report_segment_error(error.ISTATE_ERROR, segment=initial_state, filename='', dataset='pcoord', e=e, loader=self.get_pcoord, traceback=a))
             initial_state.istate_status = InitialState.ISTATE_STATUS_FAILED
             raise
@@ -759,7 +759,7 @@ class ExecutablePropagator(WESTPropagator):
         child_info = self.exe_info['propagator']
         
         for segment in segments:
-            segment.error = []
+            #segment.error = []
             starttime = time.time()
 
             addtl_env = {}

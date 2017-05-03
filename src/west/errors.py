@@ -445,10 +445,11 @@ class WESTErrorReporting:
                 self.reported_errors[error['msg']] = True
 
     class ErrorHandled(Exception):
-        #sys.tracebacklimit=0
         pass
 
     def raise_exception(self):
+        # This is a killing function, so kill the traceback when we call it.
+        sys.tracebacklimit=0
         raise self.ErrorHandled('Error reported from {}'.format(self.cp))
 
     def format_stderr(self, err):
