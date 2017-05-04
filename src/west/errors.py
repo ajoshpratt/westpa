@@ -73,234 +73,235 @@ class WESTErrorReporting:
         pcoord_ndim = self.system.pcoord_ndim
         self.llinebreak = "-"*64
         self.linebreak = "-"*42
+        self.padding = " "*4
         self.format_kwargs = { 'executable': executable, 'rcfile': rcfile, 'pcoord_ndim': pcoord_ndim, 'pcoord_len': pcoord_len, 'logfile': logfile,
-                'wiki': wiki, 'linebreak': self.linebreak, 'cp': cp, 'llinebreak': self.llinebreak , 'error_lines': self.error_lines }
+                'wiki': wiki, 'linebreak': self.linebreak, 'cp': cp, 'llinebreak': self.llinebreak , 'error_lines': self.error_lines, 'pad': self.padding }
 
         self.SEG_ERROR            = """
-        {llinebreak}{linebreak}
-        ERROR # {id} ON Iteration: {segment.n_iter}, {segment_type}: {segment.seg_id}"""
+{llinebreak}{linebreak}
+ERROR # {id} ON Iteration: {segment.n_iter}, {segment_type}: {segment.seg_id}"""
 
         self.ITER_ERROR = """
-        {llinebreak}{linebreak}
-        ERROR # {id} ON Iteration: {iteration}"""
+{llinebreak}{linebreak}
+ERROR # {id} ON Iteration: {iteration}"""
 
         self.RUNSEG_SIGNAL_ERROR = { 'msg': """
-        The {executable} propagator has caught signal {rc}.
+The {executable} propagator has caught signal {rc}.
 
-        FILES TO CHECK
+FILES TO CHECK
 
-        {logfile}
-        {executable}
+{logfile}
+{executable}
 
-        LAST {error_lines} LINES OF STDERR
-        {linebreak}
-        {err}
-        {linebreak}
-        """,
+LAST {error_lines} LINES OF STDERR
+{linebreak}
+{err}
+{linebreak}
+""",
         'id': 'E0' }
 
         self.RUNSEG_GENERAL_ERROR = { 'msg': """
-        The {executable} propagator has exited with signal {rc}.
+The {executable} propagator has exited with signal {rc}.
 
-        FILES TO CHECK
+FILES TO CHECK
 
-        {logfile}
-        {executable}
+{logfile}
+{executable}
 
-        LAST {error_lines} LINES OF STDERR
-        {linebreak}
-        {err}
-        {linebreak}
-        """,
+LAST {error_lines} LINES OF STDERR
+{linebreak}
+{err}
+{linebreak}
+""",
         'id': 'E0' }
 
         self.RUNSEG_PCOORD_ERROR = { 'msg': """
-        pcoord for {segment.seg_id} in iteration {segment.n_iter} has invalid values.
-        
-        PCOORD
-        {linebreak}
-        {pcoord[0]}
-        {linebreak}
+pcoord for {segment.seg_id} in iteration {segment.n_iter} has invalid values.
 
-        FILES TO CHECK
+PCOORD
+{linebreak}
+{pcoord[0]}
+{linebreak}
 
-        {logfile}
-        {executable}
+FILES TO CHECK
 
-        LAST {error_lines} LINES OF STDERR
-        {linebreak}
-        {err}
-        {linebreak}
-        """,
+{logfile}
+{executable}
+
+LAST {error_lines} LINES OF STDERR
+{linebreak}
+{err}
+{linebreak}
+""",
         'id': 'E0' }
 
         self.RUNSEG_SHAPE_ERROR = { 'msg': """
-        The shape of your progress coordinate return value is {shape},
-        which is different from what is specified in your {rcfile}: ({pcoord_len}, {pcoord_ndim}).  
+The shape of your progress coordinate return value is {shape},
+which is different from what is specified in your {rcfile}: ({pcoord_len}, {pcoord_ndim}).  
 
-        FILES TO CHECK
+FILES TO CHECK
 
-        {executable}
-        {rcfile}
-        Your dynamics engine configuration file.
+{executable}
+{rcfile}
+Your dynamics engine configuration file.
 
-        They should all agree on number of values/timepoints/progress coordinate values
-        that you are returning.
+They should all agree on number of values/timepoints/progress coordinate values
+that you are returning.
 
-        See {logfile}
-        """,
+See {logfile}
+""",
         'id': 'E1' }
 
         self.RUNSEG_TMP_ERROR = { 'msg': """
-        Could not read the {dataset} return value from {filename} for segment {segment.seg_id} in iteration {segment.n_iter}.
+Could not read the {dataset} return value from {filename} for segment {segment.seg_id} in iteration {segment.n_iter}.
 
-        FILES/FUNCTIONS TO CHECK
+FILES/FUNCTIONS TO CHECK
 
-        {logfile}
-        {executable}
-        {loader.__module__}.{loader.func_name}
-        {rcfile} - did you want to return this dataset?
-        {filename} - is this location writable?
+{logfile}
+{executable}
+{loader.__module__}.{loader.func_name}
+{rcfile} - did you want to return this dataset?
+{filename} - is this location writable?
 
-        Specific exception:
-        {linebreak}
-        {loader.__module__}.{loader.func_name}:
-        {e}
+Specific exception:
+{linebreak}
+{loader.__module__}.{loader.func_name}:
+{e}
 
-        {traceback}
-        {linebreak}
+{traceback}
+{linebreak}
 
-        LAST {error_lines} LINES OF STDERR
-        {linebreak}
-        {segment.err}
-        {linebreak}
+LAST {error_lines} LINES OF STDERR
+{linebreak}
+{segment.err}
+{linebreak}
         """,
         'id': 'E2' }
 
         self.RUNSEG_PROP_ERROR = { 'msg': """
-        Propagation has failed for {failed_segments} segments:
-        {linebreak}
-        {failed_ids}
-        {linebreak}
+Propagation has failed for {failed_segments} segments:
+{linebreak}
+{failed_ids}
+{linebreak}
 
-        Check the corresponding log files for each ID.
-        """,
+Check the corresponding log files for each ID.
+""",
         'id': 'E4' }
 
         self.EMPTY_PCOORD_ERROR = { 'msg': """
-        The pcoord dataset on seg_id {segment.seg_id} is empty.
+The pcoord dataset on seg_id {segment.seg_id} is empty.
 
-        FILES/FUNCTIONS TO CHECK
+FILES/FUNCTIONS TO CHECK
 
-        {logfile}
-        {executable}
-        Any custom pcoord loader, if using.
+{logfile}
+{executable}
+Any custom pcoord loader, if using.
 
-        LAST {error_lines} LINES OF STDERR
-        {linebreak}
-        {err}
-        {linebreak}
-        """,
+LAST {error_lines} LINES OF STDERR
+{linebreak}
+{err}
+{linebreak}
+""",
         'id': 'E5' }
 
         self.LOADTXT_ERROR = { 'msg': """
-        The {dataset} on seg_id {segment.seg_id} is unable to be loaded via numpy.loadtxt(). 
+The {dataset} on seg_id {segment.seg_id} is unable to be loaded via numpy.loadtxt(). 
 
-        FILES/FUNCTIONS TO CHECK
+FILES/FUNCTIONS TO CHECK
 
-        {logfile}
-        {executable}
-        Any custom pcoord loader, if using.
+{logfile}
+{executable}
+Any custom pcoord loader, if using.
 
-        LAST {error_lines} LINES OF STDERR
-        {linebreak}
-        {err}
-        {linebreak}
-        """,
+LAST {error_lines} LINES OF STDERR
+{linebreak}
+{err}
+{linebreak}
+""",
         'id': 'E6' }
 
         self.EMPTY_TRAJECTORY = { 'msg': """
-        The trajectory return for seg_id {segment.seg_id} is empty.
-        Ensure that $WEST_TRAJECTORY_RETURN is not empty, or disable trajectory return in {rcfile}.
-        {llinebreak}{linebreak}
-        """,
+The trajectory return for seg_id {segment.seg_id} is empty.
+Ensure that $WEST_TRAJECTORY_RETURN is not empty, or disable trajectory return in {rcfile}.
+{llinebreak}{linebreak}
+""",
         'id': 'E7' }
 
         self.EMPTY_RESTART = { 'msg': """
-        The restart return for seg_id {segment.seg_id} is empty.
-        Ensure that $WEST_RESTART_RETURN is not empty, or disable the restart return in {rcfile}.
-        {llinebreak}{linebreak}
-        """,
+The restart return for seg_id {segment.seg_id} is empty.
+Ensure that $WEST_RESTART_RETURN is not empty, or disable the restart return in {rcfile}.
+{llinebreak}{linebreak}
+""",
         'id': 'E8' }
 
         self.LARGE_RESTART = { 'msg': """
-        The restart return for seg_id {segment.seg_id} is {size}.  This is likely to
-        result in RAM-intensive WESTPA runs.  Check your propagator to ensure that
-        you're sending in the minimum amount of data.  This is not fatal.
-        FILES/FUNCTIONS TO CHECK
+The restart return for seg_id {segment.seg_id} is {size}.  This is likely to
+result in RAM-intensive WESTPA runs.  Check your propagator to ensure that
+you're sending in the minimum amount of data.  This is not fatal.
+FILES/FUNCTIONS TO CHECK
 
-        {executable}
+{executable}
 
-        """,
+""",
         'id': 'E9' }
 
         self.ISTATE_ERROR = { 'msg': """
-        ISTATE GENERATION FAILURE: Could not read the {dataset} return value istate {segment.seg_id} in iteration {segment.n_iter}.
+ISTATE GENERATION FAILURE: Could not read the {dataset} return value istate {segment.seg_id} in iteration {segment.n_iter}.
 
-        FILES/FUNCTIONS TO CHECK
-        
-        {executable}
-        {loader.__module__}.{loader.func_name}
-        {filename} - is this location writable?
+FILES/FUNCTIONS TO CHECK
 
-        Specific exception:
-        {linebreak}
-        {loader.__module__}.{loader.func_name}:
-        {e}
+{executable}
+{loader.__module__}.{loader.func_name}
+{filename} - is this location writable?
 
-        {traceback}
-        {linebreak}
+Specific exception:
+{linebreak}
+{loader.__module__}.{loader.func_name}:
+{e}
 
-        LAST {error_lines} LINES OF STDERR
-        {linebreak}
-        {segment.err}
-        {linebreak}
-        """,
+{traceback}
+{linebreak}
+
+LAST {error_lines} LINES OF STDERR
+{linebreak}
+{segment.err}
+{linebreak}
+""",
         'id': 'E10' }
 
         self.WRUN_INTERRUPTED = { 'msg': """
-        INTERRUPTION
+INTERRUPTION
 
-        An interruption has been sent to {cp}.
-        This has either been done manually (such as the break command or the killing of a queue script),
-        or by the local sysadmin.
-        """,
+An interruption has been sent to {cp}.
+This has either been done manually (such as the break command or the killing of a queue script),
+or by the local sysadmin.
+""",
         'id': 'W5' }
 
         self.RUNSEG_EMPTY_VARIABLES = { 'msg': """
-        NOTICE
+NOTICE
 
-        Empty variables exist in your {executable}.  This could be a problem.
+Empty variables exist in your {executable}.  This could be a problem.
 
-        {linebreak}
-        {empties}
-        {linebreak}
+{linebreak}
+{empties}
+{linebreak}
 
-        """,
+""",
         'id': 'E99' }
 
         self.REPORT_ONCE = """
-        {llinebreak}{linebreak}
+{llinebreak}{linebreak}
 
-        The configuration has been set such that each error type is caught only once; all other
-        segments which report the same error will have their output suppressed.  This can be disabled."""
+The configuration has been set such that each error type is caught only once; all other
+segments which report the same error will have their output suppressed.  This can be disabled."""
 
         self.SEE_WIKI = """
-        Check the wiki for more information
-        https://chong.chem.pitt.edu/wewiki/WESTPA_Error_Handling#ERROR_{id}
+Check the wiki for more information
+https://chong.chem.pitt.edu/wewiki/WESTPA_Error_Handling#ERROR_{id}
 
-        {llinebreak}{linebreak}
-        """ 
+{llinebreak}{linebreak}
+""" 
 
 
     def report_segment_error(self, error, segment, **kwargs):
@@ -333,10 +334,11 @@ class WESTErrorReporting:
             if self.report_all_errors == False:
                 try:
                     if self.reported_errors[self.REPORT_ONCE] == False:
-                        self.pstatus(self.REPORT_ONCE.format(**self.format_kwargs))
+                        self.pstatus("\n{pad}".join(self.REPORT_ONCE.splitlines()).format(**self.format_kwargs))
                         self.reported_errors[self.REPORT_ONCE] = True
                 except:
-                    self.pstatus(self.REPORT_ONCE.format(**self.format_kwargs))
+                    #self.pstatus(self.REPORT_ONCE.format(**self.format_kwargs))
+                    self.pstatus("\n{pad}".join(self.REPORT_ONCE.splitlines()).format(**self.format_kwargs))
                     self.reported_errors[self.REPORT_ONCE] = True
 
             try:
@@ -353,16 +355,18 @@ class WESTErrorReporting:
                 if self.report_all_errors == False:
                     self.reported_errors[error['msg']] = True
         # Instead of the prop reporting it, we'll do it from the sim manager...
-        return (self.SEG_ERROR.format(**self.format_kwargs)+(error['msg'].format(**self.format_kwargs)), error)
+        #return (("\n{pad}".join(self.SEG_ERROR.splitlines()).format(**self.format_kwargs))+"\n{pad}".join(error['msg'].splitlines()).format(**self.format_kwargs), error)
+        return (("\n{pad}".join(self.SEG_ERROR.format(**self.format_kwargs).splitlines()).format(pad=self.padding))+"\n{pad}".join(error['msg'].format(**self.format_kwargs).splitlines()).format(pad=self.padding), error)
+        #return (self.SEG_ERROR.format(**self.format_kwargs)+(error['msg'].format(**self.format_kwargs)), error)
 
     def report_error(self, error, **kwargs):
         #sys.tracebacklimit=0
         self.format_kwargs.update(kwargs)
         # Pull in the ID.
         self.format_kwargs.update(error)
-        self.pstatus(self.ITER_ERROR.format(**self.format_kwargs))
-        self.pstatus(error['msg'].format(**self.format_kwargs))
-        self.pstatus(self.SEE_WIKI.format(**self.format_kwargs))
+        self.pstatus("\n{pad}".join(self.ITER_ERROR.format(**self.format_kwargs).splitlines()).format(pad=self.padding))
+        self.pstatus("\n{pad}".join(error['msg'].format(**self.format_kwargs).splitlines()).format(pad=self.padding))
+        self.pstatus("\n{pad}".join(self.SEE_WIKI.format(**self.format_kwargs).splitlines()).format(pad=self.padding))
 
     def scan_shell_variables(self, script):
         if self.shell_variables == None or self.script != script:
@@ -443,23 +447,28 @@ class WESTErrorReporting:
         if self.report_all_errors == False:
             try:
                 if self.reported_errors[self.REPORT_ONCE] == False:
-                    self.pstatus(self.REPORT_ONCE.format(**self.format_kwargs))
+                    #self.pstatus(self.REPORT_ONCE.format(**self.format_kwargs))
+                    self.pstatus("\n{pad}".join(self.REPORT_ONCE.format(**self.format_kwargs).splitlines()).format(pad=self.padding))
                     self.reported_errors[self.REPORT_ONCE] = True
             except:
-                self.pstatus(self.REPORT_ONCE.format(**self.format_kwargs))
+                #self.pstatus(self.REPORT_ONCE.format(**self.format_kwargs))
+                self.pstatus("\n{pad}".join(self.REPORT_ONCE.format(**self.format_kwargs).splitlines()).format(pad=self.padding))
                 self.reported_errors[self.REPORT_ONCE] = True
 
         try:
             if self.reported_errors[error['msg']] == False:
-                self.pstatus(error['msg'].format(**self.format_kwargs))
+                #self.pstatus(error['msg'].format(**self.format_kwargs))
+                self.pstatus("\n{pad}".join(error['msg'].format(**self.format_kwargs).splitlines()).format(pad=self.padding))
                 if see_wiki:
-                    self.pstatus(self.SEE_WIKI.format(**self.format_kwargs))
+                    #self.pstatus(self.SEE_WIKI.format(**self.format_kwargs))
+                    self.pstatus("\n{pad}".join(self.SEE_WIKI.format(**self.format_kwargs).splitlines()).format(pad=self.padding))
                 if self.report_all_errors == False:
                     self.reported_errors[error['msg']] = True
         except:
             self.pstatus(error['msg'].format(**self.format_kwargs))
             if see_wiki:
-                self.pstatus(self.SEE_WIKI.format(**self.format_kwargs))
+                #self.pstatus(self.SEE_WIKI.format(**self.format_kwargs))
+                self.pstatus("\n{pad}".join(self.SEE_WIKI.format(**self.format_kwargs).splitlines()).format(pad=self.padding))
             if self.report_all_errors == False:
                 self.reported_errors[error['msg']] = True
 
@@ -467,11 +476,13 @@ class WESTErrorReporting:
         pass
 
     def raise_exception(self):
-        # This is a killing function, so kill the traceback when we call it.
+        # This is a killing (word) function, so kill the traceback when we call it.
         sys.tracebacklimit=0
         raise self.ErrorHandled('Error reported from {}'.format(self.cp))
 
     def format_stderr(self, err):
-        return  "\n        ".join(err.splitlines()[(-1*self.error_lines):]) 
+        err = err.replace('{', '[')
+        err = err.replace('}', ']')
+        return  "\n{pad}".join(err.splitlines()[(-1*self.error_lines):]).format(pad=self.padding)
 
 

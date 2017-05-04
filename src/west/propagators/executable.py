@@ -153,7 +153,7 @@ def trajectory_input(fieldname, coord_file, segment, single_point):
         #if data.nbytes == 0:
             #log.warning('could not read any trajectory data for {}.  Disable trajectory storage in your config file to remove this warning.'.format(fieldname))
             a = traceback.format_exc()
-            a = "\n        ".join(a.splitlines()[:])
+            #a = "\n        ".join(a.splitlines()[:])
             #error.report_general_error_once(error.EMPTY_TRAJECTORY, segment=segment)
             segment.error.append(error.report_segment_error(error.EMPTY_TRAJECTORY, segment=segment, filename=coord_file, dataset=fieldname, e=e, loader=trajectory_input, traceback=a))
             #error.report_general_error_once(error.EMPTY_TRAJECTORY, segment=segment, filename=coord_file, dataset=fieldname, e=e, loader=trajectory_input, traceback=a, see_wiki=False)
@@ -210,7 +210,7 @@ def restart_input(fieldname, coord_file, segment, single_point):
     t.close()
     d.close()
     del(d,t)
-    log.debug('{fieldname} with size {tarsize} for seg_id {segment.seg_id} successfully loaded in iter {segment.n_iter}.'.format(segment=segment, fieldname=fieldname, tarsize=tarsize))
+    #log.debug('{fieldname} with size {tarsize} for seg_id {segment.seg_id} successfully loaded in iter {segment.n_iter}.'.format(segment=segment, fieldname=fieldname, tarsize=tarsize))
     # We could enable some sort of debug for the prop, but this likely results in excessive memory usage during normal runs.
     #with tarfile.open(fileobj=e, mode='r') as t:
     #    for file in t.getmembers():
@@ -496,7 +496,8 @@ class ExecutablePropagator(WESTPropagator):
                 stdout.write(err)
         rc = proc.returncode
         #return (rc, rusage, "\n        ".join(err.splitlines()[-10:]))
-        return (rc, rusage, "\n        ".join(err.splitlines()[-10:]))
+        #return (rc, rusage, "\n        ".join(err.splitlines()[-10:]))
+        return (rc, rusage, "\n".join(err.splitlines()[-10:]))
     
     def exec_child_from_child_info(self, child_info, template_args, environ):
         for (key, value) in child_info.get('environ', {}).iteritems():
@@ -690,7 +691,7 @@ class ExecutablePropagator(WESTPropagator):
                 check_pcoord(state, original_pcoord=porig, single_point=True, executable=child_info['executable'], logfile=child_info['stdout'])
             except Exception as e:
                 a = traceback.format_exc()
-                a = "\n        ".join(a.splitlines()[:])
+                #a = "\n        ".join(a.splitlines()[:])
                 #error.report_general_error_once(error.EMPTY_TRAJECTORY, segment=segment)
                 # Why aren't we using istate_error?  It's a little easier to just use the same code path for everything, here.
                 state.error.append(error.report_segment_error(error.ISTATE_ERROR, segment=state, filename=prfname, dataset='pcoord', e=e, loader=ploader, traceback=a))
@@ -729,7 +730,7 @@ class ExecutablePropagator(WESTPropagator):
             #log.exception('could not get progress coordinate for initial state {!r}'.format(initial_state))
             a = traceback.format_exc()
             #a = a.split('\n')
-            a = "\n        ".join(a.splitlines()[:])
+            #a = "\n        ".join(a.splitlines()[:])
             #initial_state.error = []
             initial_state.error.append(error.report_segment_error(error.ISTATE_ERROR, segment=initial_state, filename='', dataset='pcoord', e=e, loader=self.get_pcoord, traceback=a))
             initial_state.istate_status = InitialState.ISTATE_STATUS_FAILED
@@ -864,7 +865,7 @@ class ExecutablePropagator(WESTPropagator):
                     #print(log.exception(e))
                     a = traceback.format_exc()
                     #a = a.split('\n')
-                    a = "\n        ".join(a.splitlines()[:])
+                    #a = "\n        ".join(a.splitlines()[:])
                     #print(e, dataset)
                     #if dataset != 'pcoord':
                     #    error.report_segment_error(error.RUNSEG_TMP_ERROR, segment=segment, filename=filename, dataset=dataset, e=e)
@@ -876,7 +877,7 @@ class ExecutablePropagator(WESTPropagator):
                     #    error.report_segment_error(error.EMPTY_PCOORD_ERROR, segment=segment, filename=filename, dataset=dataset, e=e)
                     #log.error('could not read {} from {!r}: {!r}'.format(dataset, filename, e))
                     segment.status = Segment.SEG_STATUS_FAILED 
-                    break
+                    #break
 
             # Why are we deleting the dataset AFTER we load it?  We want to expose the trajectory and restart information to the
             # pcoord loader, if applicable.
