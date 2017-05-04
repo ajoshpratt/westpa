@@ -169,6 +169,11 @@ class WESTErrorReporting:
 
         {traceback}
         {linebreak}
+
+        LAST {error_lines} LINES OF STDERR
+        {linebreak}
+        {segment.err}
+        {linebreak}
         """,
         'id': 'E2' }
 
@@ -242,13 +247,23 @@ class WESTErrorReporting:
         self.ISTATE_ERROR = { 'msg': """
         ISTATE GENERATION FAILURE: Could not read the {dataset} return value istate {segment.seg_id} in iteration {segment.n_iter}.
 
-        Specific exception:
+        FILES/FUNCTIONS TO CHECK
+        
+        {executable}
+        {loader.__module__}.{loader.func_name}
+        {filename} - is this location writable?
 
+        Specific exception:
         {linebreak}
         {loader.__module__}.{loader.func_name}:
         {e}
 
         {traceback}
+        {linebreak}
+
+        LAST {error_lines} LINES OF STDERR
+        {linebreak}
+        {segment.err}
         {linebreak}
         """,
         'id': 'E10' }
