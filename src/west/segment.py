@@ -88,7 +88,7 @@ class Segment:
         self.error = error if error else []
 
     def __repr__(self):
-        return '<%s(%s) n_iter=%r seg_id=%r weight=%r parent_id=%r wtg_parent_ids=%r pcoord[0]=%r pcoord[-1]=%r>' \
+        return '<%s(%s) n_iter=%r seg_id=%r weight=%r parent_id=%r wtg_parent_ids=%r pcoord[0]=%r pcoord[-1]=%r> restart=%r' \
                % (self.__class__.__name__, hex(id(self)),
                   self.n_iter, self.seg_id, self.weight, self.parent_id, tuple(self.wtg_parent_ids or ()),
                   self.pcoord[0] if self.pcoord is not None else None,

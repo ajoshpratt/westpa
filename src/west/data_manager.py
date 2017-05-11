@@ -561,7 +561,7 @@ class WESTDataManager:
                     if self.we_h5file_version == 8:
                         state_table[i]['restart'] = state.data['trajectories/restart']
                         #assert state_table[i]['restart'] == state.data['trajectories/restart']
-                        #del(state.data)
+                        del(state.data)
                 state_group['bstate_index'] = state_table
                 state_group['bstate_pcoord'] = state_pcoords
             
@@ -576,12 +576,15 @@ class WESTDataManager:
             n_iter = n_iter or self.current_iteration
             ibstate_group = self.find_ibstate_group(n_iter)
             try:
-                bstate_index = ibstate_group['bstate_index'][...]
+                #bstate_index = ibstate_group['bstate_index'][...]
+                bstate_index = ibstate_group['bstate_index']
             except KeyError:
                 return []
             bstate_pcoords = ibstate_group['bstate_pcoord'][...]
             bstates = [BasisState(state_id=i, label=row['label'], probability=row['probability'],
-                                  auxref = str(row['auxref']) or None, pcoord=pcoord.copy(), data={'trajectories/restart': row['restart']})
+                                  #auxref = str(row['auxref']) or None, pcoord=pcoord.copy(), data={'trajectories/restart': row['restart']})
+                                  #auxref = str(row['auxref']) or None, pcoord=pcoord.copy(), data={'trajectories/restart': ibstate_group['bstate_index']['restart'][i].ref})
+                                  auxref = str(row['auxref']) or None, pcoord=pcoord.copy(), data={'trajectories/restart': ibstate_group['bstate_index'].regionref[(i)] })
                        for (i, (row, pcoord))  in enumerate(izip(bstate_index, bstate_pcoords))]
             return bstates
             
@@ -650,7 +653,7 @@ class WESTDataManager:
                     #if initial_state.istate_status != InitialState.ISTATE_STATUS_PENDING:
                         index_entries[i]['restart'] = initial_state.data['trajectories/restart']
                         #assert index_entries[i]['restart'] == initial_state.data['trajectories/restart']
-                        #del(initial_state.data)
+                        del(initial_state.data)
                     except:
                         pass
             
@@ -663,7 +666,8 @@ class WESTDataManager:
             n_iter = n_iter or self.current_iteration
             ibstate_group = self.find_ibstate_group(n_iter)
             try:
-                istate_index = ibstate_group['istate_index'][...]
+                #istate_index = ibstate_group['istate_index'][...]
+                istate_index = ibstate_group['istate_index']
             except KeyError:
                 return []
             istate_pcoords = ibstate_group['pcoord'][...]
@@ -671,7 +675,8 @@ class WESTDataManager:
             for state_id, (state, pcoord) in enumerate(izip(istate_index, istate_pcoords)):
                 states.append(InitialState(state_id=state_id, basis_state_id=long(state['basis_state_id']),
                                            iter_created=int(state['iter_created']), iter_used=int(state['iter_used']),
-                                           istate_type=int(state['istate_type']), pcoord=pcoord.copy(), data={'trajectories/restart': state['restart']}))
+                                           #istate_type=int(state['istate_type']), pcoord=pcoord.copy(), data={'trajectories/restart': state['restart']}))
+                                           istate_type=int(state['istate_type']), pcoord=pcoord.copy(), data={'trajectories/restart': ibstate_group['istate_index'].regionref[state_id]}))
             return states
                 
     def get_segment_initial_states(self, segments, n_iter=None):
@@ -686,14 +691,18 @@ class WESTDataManager:
             if not sorted_istate_ids:
                 return []
             
-            istate_rows = ibstate_group['istate_index'][sorted_istate_ids][...]
+            # We don't want to copy this; it's memory intensive.
+            #istate_rows = ibstate_group['istate_index'][sorted_istate_ids][...]
+            istate_rows = ibstate_group['istate_index'][sorted_istate_ids]
             istate_pcoords = ibstate_group['istate_pcoord'][sorted_istate_ids][...]
             istates = []
             
             for state_id, state, pcoord in izip(sorted_istate_ids, istate_rows, istate_pcoords):
                 istate = InitialState(state_id=state_id, basis_state_id=long(state['basis_state_id']),
                                       iter_created=int(state['iter_created']), iter_used=int(state['iter_used']),
-                                      istate_type=int(state['istate_type']), pcoord=pcoord.copy(), data={ 'trajectories/restart': state['restart']})
+                                      istate_type=int(state['istate_type']), pcoord=pcoord.copy(), data={ 'trajectories/restart': ibstate_group['istate_index'].regionref[state_id]})
+                                  #auxref = str(row['auxref']) or None, pcoord=pcoord.copy(), data={'trajectories/restart': ibstate_group['bstate_index'].regionref[(i)] })
+                                      #istate_type=int(state['istate_type']), pcoord=pcoord.copy(), data={ 'trajectories/restart': state['restart']})
                 istates.append(istate)
             return istates 
             
@@ -731,7 +740,9 @@ class WESTDataManager:
                                                    iter_created = int(row['iter_created']), iter_used=0,
                                                    istate_type = int(row['istate_type']),
                                                    pcoord=pcoord.copy(),
-                                                   data={'trajectories/restart': row['restart']},
+                                                   #data={'trajectories/restart': row['restart']},
+                                                   # Just pull the ref and call it a day.  This is untested.
+                                                   data={'trajectories/restart': ibstate_group['istate_index'].regionref[ci+istart]},
                                                    istate_status=ISTATE_STATUS_PREPARED)
                         #istate.data = {}
                         #istate.data['trajectories/restart'] = row['restart']

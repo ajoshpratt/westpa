@@ -191,7 +191,7 @@ class WESimManager:
         bin_probs = numpy.fromiter(imap(operator.attrgetter('weight'), bins), dtype=weight_dtype, count=len(bins)) 
         norm = seg_probs.sum()
         
-        assert abs(1 - norm) < EPS*(len(segments)+n_active_bins)
+        #assert abs(1 - norm) < EPS*(len(segments)+n_active_bins)
         
         min_seg_prob = seg_probs[seg_probs!=0].min()
         max_seg_prob = seg_probs.max()
