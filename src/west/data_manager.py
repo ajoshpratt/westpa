@@ -374,7 +374,8 @@ class WESTDataManager:
                                 
     def prepare_backing(self): #istates):
         '''Create new HDF5 file'''
-        self.we_h5file = h5py.File(self.we_h5filename, 'w', driver=self.we_h5file_driver, flags="NPY_ARRAY_FORCECAST")
+        #self.we_h5file = h5py.File(self.we_h5filename, 'w', driver=self.we_h5file_driver, flags="NPY_ARRAY_FORCECAST")
+        self.we_h5file = h5py.File(self.we_h5filename, 'w', driver=self.we_h5file_driver)#, flags="NPY_ARRAY_FORCECAST")
         
         with self.flushing_lock():
             self.we_h5file_version = file_format_version
@@ -403,7 +404,8 @@ class WESTDataManager:
         '''Create new HDF5 file that can be used to symlink in extra.'''
         # This is mostly just here for convenience, right now.  I think it's the right place to put it in there.
         # We'll return it and use it in the data manager and set it as an option to store auxfiles.
-        aux_h5file = h5py.File(h5filename, 'w', driver=self.we_h5file_driver, flags="NPY_ARRAY_FORCECAST")
+        #aux_h5file = h5py.File(h5filename, 'w', driver=self.we_h5file_driver, flags="NPY_ARRAY_FORCECAST")
+        aux_h5file = h5py.File(h5filename, 'w', driver=self.we_h5file_driver)#, flags="NPY_ARRAY_FORCECAST")
         
         #def flushing_lock(self):
         #    return flushing_lock(self.lock, self.we_h5file)
