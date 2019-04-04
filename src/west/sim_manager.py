@@ -508,7 +508,7 @@ class WESimManager:
                 log.debug('using basis state {!r} directly'.format(basis_state))
                 initial_state.istate_type = InitialState.ISTATE_TYPE_BASIS
                 initial_state.pcoord = basis_state.pcoord.copy()
-                #initial_state.restart = basis_state.restart.copy()
+                initial_state.restart = basis_state.restart.copy()
                 # Don't copy.
                 initial_state.data = basis_state.data
                 initial_state.istate_status = InitialState.ISTATE_STATUS_PREPARED
@@ -525,8 +525,10 @@ class WESimManager:
         log.debug('iteration {:d}: propagating {:d} segments'.format(self.n_iter, len(segments)))
         # Dereference restart data
         for seg in segments:
+            seg.restart = self.data_manager.we_h5file[seg.restart]['restart'][seg.parent_id]
+            '''
             try:
-                seg.restart = self.data_manager.we_h5file[seg.restart]['trajectories/restart'][seg.parent_id]
+                seg.restart = self.data_manager.we_h5file[seg.restart]['restart'][seg.parent_id]
                 # From an istate
             except:
                 try:
@@ -535,6 +537,7 @@ class WESimManager:
                     # We're not storing any restart information.
                     seg.restart = None
                     pass
+                    '''
 
         # all futures dispatched for this iteration
         futures = set()

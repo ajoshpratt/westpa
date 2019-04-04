@@ -228,6 +228,7 @@ def restart_output(tarball, segment):
     # We 'recreate' the tarball by decoding, unpickling, and then loading it up as a file object in memory.
     # We then untar to the location specified, and delete the restart data on the segment (as it is rather memory intensive).
 
+    # print(segment.restart)
     e = io.BytesIO(cPickle.loads(str(segment.restart).decode('base64')))
     with tarfile.open(fileobj=e, mode='r:') as t:
         t.extractall(path=tarball)
