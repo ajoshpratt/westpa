@@ -15,15 +15,14 @@
 # You should have received a copy of the GNU General Public License
 # along with WESTPA.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function, division; __metaclass__ = type
 import sys
 import logging
 import math
 from numpy import index_exp
 
 from west.data_manager import seg_id_dtype, weight_dtype
-from westpa.binning import index_dtype, assign_and_label, accumulate_labeled_populations 
-from westtools import (WESTParallelTool, WESTDataReader, WESTDSSynthesizer, BinMappingComponent, 
+from westpa.binning import index_dtype, assign_and_label, accumulate_labeled_populations
+from westtools import (WESTParallelTool, WESTDataReader, WESTDSSynthesizer, BinMappingComponent, mapper_from_dict,
                        ProgressIndicatorComponent)
 import numpy
 import westpa
@@ -33,6 +32,7 @@ from westpa.extloader import get_object
 
 log = logging.getLogger('westtools.w_assign')
 
+# Changes to keep it alive...
 def parse_pcoord_value(pc_str):
     namespace = {'math': math,
                  'numpy': numpy,
@@ -47,7 +47,7 @@ def parse_pcoord_value(pc_str):
         raise ValueError('too many dimensions')
     return arr
 
-def _assign_label_pop(n_iter, lb, ub, mapper, nstates, state_map, last_labels, parent_id_dsspec, weight_dsspec, pcoord_dsspec):
+def _assign_label_pop(n_iter, lb, ub, mapper, nstates, state_map, last_labels, parent_id_dsspec, weight_dsspec, pcoord_dsspec, subsample):
 
     nbins = len(state_map)-1
     parent_ids = parent_id_dsspec.get_iter_data(n_iter,index_exp[lb:ub])
@@ -55,7 +55,7 @@ def _assign_label_pop(n_iter, lb, ub, mapper, nstates, state_map, last_labels, p
     pcoords = pcoord_dsspec.get_iter_data(n_iter,index_exp[lb:ub])
     
     assignments, trajlabels, statelabels = assign_and_label(lb, ub, parent_ids,
-                                               mapper.assign, nstates, state_map, last_labels, pcoords)
+                                               mapper.assign, nstates, state_map, last_labels, pcoords, subsample)
     pops = numpy.zeros((nstates+1,nbins+1), weight_dtype)
     accumulate_labeled_populations(weights, assignments, trajlabels, pops)
     return (assignments, trajlabels, pops, lb, ub, statelabels)
@@ -237,10 +237,11 @@ Command-line options
         self.output_file = None
         self.output_filename = None
         self.states = []
+        self.subsample = False
     
     def add_args(self, parser):
         self.data_reader.add_args(parser)
-        self.binning.add_args(parser, suppress=['--bins-from-h5file'])
+        self.binning.add_args(parser) 
         self.dssynth.add_args(parser)
         
         sgroup = parser.add_argument_group('macrostate definitions').add_mutually_exclusive_group()
@@ -261,17 +262,40 @@ Command-line options
         agroup = parser.add_argument_group('other options')
         agroup.add_argument('-o', '--output', dest='output', default='assign.h5',
                             help='''Store results in OUTPUT (default: %(default)s).''')
+        agroup.add_argument('--subsample', dest='subsample', action='store_const', const=True,
+                             help='''Determines whether or not the data should be subsampled.
+                             This is rather useful for analysing steady state simulations.''')
+        agroup.add_argument('--config-from-file', dest='config_from_file', action='store_true', 
+                            help='''Load bins/macrostates from a scheme specified in west.cfg.''')
+        agroup.add_argument('--scheme-name', dest='scheme',
+                            help='''Name of scheme specified in west.cfg.''')
+
 
     def process_args(self, args):
         self.progress.process_args(args)
         self.data_reader.process_args(args)
+        # Necessary to open the file to get the current iteration
+        # if we want to use the mapper in the file
+        self.data_reader.open(mode='r+')
+        self.n_iter = self.data_reader.current_iteration
+        # If we decide to use this option for iteration selection: 
+        # getattr(args,'bins_from_h5file',None) or self.data_reader.current_iteration
 
         with self.data_reader:
             self.dssynth.h5filename = self.data_reader.we_h5filename
             self.dssynth.process_args(args)
-            self.binning.process_args(args)
+            if args.config_from_file == False:
+                self.binning.set_we_h5file_info(self.n_iter,self.data_reader)
+                self.binning.process_args(args)
 
-        if args.states:
+        self.output_filename = args.output
+
+        if args.config_from_file:
+            if not args.scheme:
+                raise ValueError('A scheme must be specified.')
+            else:
+                self.load_config_from_west(args.scheme)
+        elif args.states:
             self.parse_cmdline_states(args.states)
         elif args.states_from_file:
             self.load_state_file(args.states_from_file)
@@ -282,8 +306,9 @@ Command-line options
             raise ValueError('zero, two, or more macrostates are required')
 
         #self.output_file = WESTPAH5File(args.output, 'w', creating_program=True)
-        self.output_filename = args.output
         log.debug('state list: {!r}'.format(self.states))
+
+        self.subsample = args.subsample if args.subsample is not None else False
 
     def parse_cmdline_states(self, state_strings):
         states = []
@@ -297,11 +322,36 @@ Command-line options
             states.append({'label': label, 'coords': coord})
         self.states = states
 
+    def load_config_from_west(self, scheme):
+        try:
+            config = westpa.rc.config['west']['analysis']
+        except:
+            raise ValueError('There is no configuration file specified.')
+        ystates = config['analysis_schemes'][scheme]['states']
+        self.states_from_dict(ystates)
+        try:
+            self.subsample = config['subsample']
+        except:
+            pass
+        from westpa._rc import bins_from_yaml_dict
+        self.binning.mapper = bins_from_yaml_dict(config['analysis_schemes'][scheme]['bins'][0])
+        import os
+        path = os.path.join(os.getcwd(), config['directory'], scheme)
+        try:
+            os.mkdir(config['directory'])
+            os.mkdir(path)
+        except:
+            pass
+
+        self.output_filename = os.path.join(path, 'assign.h5')
+
     def load_state_file(self, state_filename):
         import yaml
         ydict = yaml.load(open(state_filename, 'rt'))
         ystates = ydict['states']
-        
+        self.states_from_dict(ystates)
+    
+    def states_from_dict(self, ystates):
         states = []
         for istate, ystate in enumerate(ystates):
             state = {}
@@ -357,23 +407,24 @@ Command-line options
         def task_gen():
             if __debug__:
                 checkset = set()
-            for lb in xrange(0, nsegs, blocksize):
+            for lb in range(0, nsegs, blocksize):
                 ub = min(nsegs, lb+blocksize)
                 if __debug__:
-                    checkset.update(set(xrange(lb,ub)))
+                    checkset.update(set(range(lb,ub)))
                 args = ()
                 kwargs = dict(n_iter=n_iter,
                               lb=lb, ub=ub, mapper=self.binning.mapper, nstates=nstates, state_map=state_map,
                               last_labels=last_labels, 
                               parent_id_dsspec=self.data_reader.parent_id_dsspec, 
                               weight_dsspec=self.data_reader.weight_dsspec,
-                              pcoord_dsspec=self.dssynth.dsspec)
+                              pcoord_dsspec=self.dssynth.dsspec,
+                              subsample=self.subsample)
                 yield (_assign_label_pop, args, kwargs)
 
                 #futures.append(self.work_manager.submit(_assign_label_pop, 
                 #kwargs=)
             if __debug__:
-                assert checkset == set(xrange(nsegs)), 'segments missing: {}'.format(set(xrange(nsegs)) - checkset)
+                assert checkset == set(range(nsegs)), 'segments missing: {}'.format(set(range(nsegs)) - checkset)
 
         #for future in self.work_manager.as_completed(futures):
         for future in self.work_manager.submit_as_completed(task_gen(), queue_size=self.max_queue_len):
@@ -431,6 +482,8 @@ Command-line options
             else:
                 nstates = 0
             self.output_file.attrs['nstates'] = nstates
+            # Stamp if this has been subsampled.
+            self.output_file.attrs['subsampled'] = self.subsample
 
             iter_count = iter_stop - iter_start
             nsegs = numpy.empty((iter_count,), seg_id_dtype)
@@ -438,7 +491,7 @@ Command-line options
 
             # scan for largest number of segments and largest number of points
             pi.new_operation ('Scanning for segment and point counts', iter_stop-iter_start)
-            for iiter, n_iter in enumerate(xrange(iter_start,iter_stop)):
+            for iiter, n_iter in enumerate(range(iter_start,iter_stop)):
                 iter_group = self.data_reader.get_iter_group(n_iter)
                 nsegs[iiter], npts[iiter] = iter_group['pcoord'].shape[0:2]
                 pi.progress += 1
@@ -478,7 +531,7 @@ Command-line options
 
             pi.new_operation('Assigning to bins', iter_stop-iter_start)
             last_labels = None # mapping of seg_id to last macrostate inhabited      
-            for iiter, n_iter in enumerate(xrange(iter_start,iter_stop)):
+            for iiter, n_iter in enumerate(range(iter_start,iter_stop)):
                 #get iteration info in this block
 
                 if iiter == 0:

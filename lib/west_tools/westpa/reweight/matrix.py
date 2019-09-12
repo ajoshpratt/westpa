@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU General Public License
 # along with WESTPA.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function, division; __metaclass__ = type
 import logging
 
 # Let's suppress those numpy warnings.
@@ -48,7 +47,7 @@ class FluxMatrix():
     def w_postanalysis_matrix(self):
         pi = self.progress.indicator
         pi.new_operation('Initializing')
-
+        
         self.data_reader.open('r')
         nbins = self.assignments_file.attrs['nbins']
 
@@ -87,7 +86,7 @@ class FluxMatrix():
 
         pi.new_operation('Calculating flux matrices', iter_count)
         # Calculate instantaneous statistics
-        for iiter, n_iter in enumerate(xrange(start_iter, stop_iter)):
+        for iiter, n_iter in enumerate(range(start_iter, stop_iter)):
             # Get data from the main HDF5 file
             iter_group = self.data_reader.get_iter_group(n_iter)
             seg_index = iter_group['seg_index']
@@ -140,4 +139,8 @@ class FluxMatrix():
 
             # Check and save the number of intermediate time points; this will be used to normalize the
             # flux and kinetics to tau in w_postanalysis_reweight.
-            self.output_file.attrs['npts'] = npts
+            if self.assignments_file.attrs['subsampled'] == True or self.sampling_frequency == 'iteration':
+                self.output_file.attrs['npts'] = 2
+            else:
+                #self.output_file.attrs['npts'] = npts if self.sampling_frequency == 'timepoint' else 2
+                self.output_file.attrs['npts'] = npts

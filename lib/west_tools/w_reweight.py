@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU General Public License
 # along with WESTPA.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function, division; __metaclass__ = type
 import logging
 
 # Let's suppress those numpy warnings.
@@ -34,7 +33,7 @@ from west.data_manager import weight_dtype, n_iter_dtype
 from westtools import (WESTMasterCommand, WESTParallelTool, WESTDataReader, IterRangeSelection, WESTSubcommand,
                        ProgressIndicatorComponent)
 
-from westtools.kinetics_tool import WESTKineticsBase, AverageCommands
+from westtools.kinetics_tool import WESTKineticsBase, AverageCommands, generate_future
 from westpa import h5io
 from westtools.dtypes import iter_block_ci_dtype as ci_dtype
 
@@ -51,12 +50,12 @@ from westpa.reweight import stats_process, reweight_for_c, FluxMatrix
 def _2D_eval_block(iblock, start, stop, nstates, data_input, name, mcbs_alpha, mcbs_nsets, mcbs_acalpha, do_correl, mcbs_enable, estimator_kwargs):
     # As our reweighting estimator is a weird function, we can't use the general mclib block.
     results = []
-    for istate in xrange(nstates):
-        for jstate in xrange(nstates):
+    for istate in range(nstates):
+        for jstate in range(nstates):
             if istate == jstate: continue
             estimator_kwargs.update(dict(istate=istate, jstate=jstate, nstates=nstates))
 
-            dataset = { 'indices' : np.array(range(start-1, stop-1), dtype=np.uint16) }
+            dataset = { 'indices' : np.array(list(range(start-1, stop-1)), dtype=np.uint16) }
             
             ci_res = mcbs_ci_correl(dataset,estimator=reweight_for_c,
                                     alpha=mcbs_alpha,n_sets=mcbs_nsets,autocorrel_alpha=mcbs_acalpha,
@@ -68,13 +67,13 @@ def _2D_eval_block(iblock, start, stop, nstates, data_input, name, mcbs_alpha, m
 def _1D_eval_block(iblock, start, stop, nstates, data_input, name, mcbs_alpha, mcbs_nsets, mcbs_acalpha, do_correl, mcbs_enable, estimator_kwargs):
     # As our reweighting estimator is a weird function, we can't use the general mclib block.
     results = []
-    for istate in xrange(nstates):
+    for istate in range(nstates):
         # A little hack to make our estimator play nice, as jstate must be there.
         # For 1D datasets (state probabilities, etc), the argument isn't used in our estimator,
         # and so any variable which has the proper type is fine.
         estimator_kwargs.update(dict(istate=istate, jstate=istate, nstates=nstates))
 
-        dataset = { 'indices' : np.array(range(start-1, stop-1), dtype=np.uint16) }
+        dataset = { 'indices' : np.array(list(range(start-1, stop-1)), dtype=np.uint16) }
         
         ci_res = mcbs_ci_correl(dataset,estimator=reweight_for_c,
                                 alpha=mcbs_alpha,n_sets=mcbs_nsets,autocorrel_alpha=mcbs_acalpha,
@@ -82,6 +81,23 @@ def _1D_eval_block(iblock, start, stop, nstates, data_input, name, mcbs_alpha, m
         results.append((name, iblock, istate, (start,stop) + ci_res))
 
     return results
+
+def _pop_eval_block(iblock, start, stop, nstates, data_input, name, mcbs_alpha, mcbs_nsets, mcbs_acalpha, do_correl, mcbs_enable, estimator_kwargs, **kwargs):
+    # As our reweighting estimator is a weird function, we can't use the general mclib block.
+    results = []
+    # A little hack to make our estimator play nice, as jstate must be there.
+    # For 1D datasets (state probabilities, etc), the argument isn't used in our estimator,
+    # and so any variable which has the proper type is fine.
+    estimator_kwargs.update(dict(istate=0, jstate=0, nstates=nstates))
+
+    estimator_kwargs.update({ 'indices' : np.array(list(range(start-1, stop-1)), dtype=np.uint16), 'stride': 1  })
+    #cpdef reweight_for_c(rows, cols, obs, flux, insert, indices, nstates, nbins, state_labels, state_map, nfbins, istate, jstate, stride, bin_last_state_map, bin_state_map, return_obs, obs_threshold=1):
+    #['nbins', 'rows', 'state_map', 'nfbins', 'bin_state_map', 'cols', 'jstate', 'flux', 'istate', 'return_obs', 'bin_last_state_map', 'insert', 'nstates', 'indices', 'state_labels', 'obs']
+    #cpdef reweight_for_c(stride, obs_threshold=1):
+    
+    ci_res = reweight_for_c(**estimator_kwargs)[...].reshape(-1,nstates).sum(axis=1)
+
+    return ci_res
 
 class RWMatrix(WESTKineticsBase, FluxMatrix):
     subcommand = 'init'
@@ -156,7 +172,8 @@ Command-line options
     def process_args(self, args):
         self.output_file = h5io.WESTPAH5File(args.output, 'w', creating_program=True)
         self.assignments_file = h5io.WESTPAH5File(args.assignments, 'r')
-        self.sampling_frequency = args.sampling_frequency
+        # Force a build of the transition matrix at the iteration level.
+        self.sampling_frequency = 'iteration' if self.assignments_file.attrs['subsampled'] == True else args.sampling_frequency
 
     def go(self):
         # This function exists in FluxMatrix, and is not currently portable.
@@ -203,7 +220,7 @@ class RWReweight(AverageCommands):
         # matches with the iteration (particularly for 'insert').
         # It's just easier to load all the data, although we could just start insert as a list of length
         # start_iter.
-        for iiter in xrange(start_iter, stop_iter):
+        for iiter in range(start_iter, stop_iter):
             iter_grp = self.kinetics_file['iterations']['iter_{:08d}'.format(iiter)]
 
             rows.append(iter_grp['rows'][...])
@@ -368,8 +385,8 @@ Command-line options
         pi = self.progress.indicator
 
         start_iter, stop_iter, step_iter = self.iter_range.iter_start, self.iter_range.iter_stop, self.iter_range.iter_step
-        start_pts = range(start_iter, stop_iter, step_iter)
-        indices = np.array(range(start_iter-1, stop_iter-1), dtype=np.uint16)
+        start_pts = list(range(start_iter, stop_iter, step_iter))
+        indices = np.array(list(range(start_iter-1, stop_iter-1)), dtype=np.uint16)
         submit_kwargs = dict(pi=pi, nstates=self.nstates, start_iter=self.start_iter, stop_iter=self.stop_iter, 
                              step_iter=self.step_iter)
 
@@ -546,8 +563,8 @@ Command-line options
         pi = self.progress.indicator
 
         start_iter, stop_iter, step_iter = self.iter_range.iter_start, self.iter_range.iter_stop, self.iter_range.iter_step
-        start_pts = range(start_iter, stop_iter, step_iter)
-        indices = np.array(range(start_iter-1, stop_iter-1, step_iter), dtype=np.uint16)
+        start_pts = list(range(start_iter, stop_iter, step_iter))
+        indices = np.array(list(range(start_iter-1, stop_iter-1, step_iter)), dtype=np.uint16)
         submit_kwargs = dict(pi=pi, nstates=self.nstates, start_iter=self.start_iter, stop_iter=self.stop_iter, 
                              step_iter=self.step_iter)
 
@@ -596,6 +613,53 @@ Command-line options
         state_evol = self.run_calculation(eval_block=_1D_eval_block, name='State Probability Evolution', dim=1, **submit_kwargs)
         self.output_file.replace_dataset('state_pop_evolution', data=state_evol, shuffle=True, compression=9)
 
+        # Little different, here.  Do a non-bootstrap evolution.
+        # Just use the work manager and the estimator without the bootstrap code, which is problematic for a dataset like this.
+        # We'll be adding this in later.
+        if False:
+            submit_kwargs['estimator_kwargs']['return_obs'] = 'P'
+            submit_kwargs['pi'] = None
+            futures = []
+            bin_pops = []
+            for iblock, start in enumerate(start_pts):
+                stop = min(start+step_iter, stop_iter)
+                if self.evolution_mode == 'cumulative' or do_averages == True:
+                    windowsize = int(self.evol_window_frac * (stop - start_iter))
+                    block_start = max(start_iter, stop - windowsize)
+                else: # self.evolution_mode == 'blocked'
+                    block_start = start
+                future_kwargs = dict(iblock=iblock, start=block_start, stop=stop,
+                                     #nstates=self.nstates,
+                                     mcbs_alpha=self.mcbs_alpha, mcbs_nsets=self.mcbs_nsets,
+                                     mcbs_acalpha=self.mcbs_acalpha,
+                                     do_correl=self.do_correl,name='Bin Population Evolution',
+                                     mcbs_enable=self.mcbs_enable,
+                                     data_input={},
+                                     **submit_kwargs)
+                #print(future_kwargs)
+                futures.append(generate_future(self.work_manager, 'Bin Pop Evolution', _pop_eval_block, future_kwargs))
+            #bin_evol = self.run_calculation(eval_block=_pop_eval_block, name='Bin Population Evolution', dim=1, **submit_kwargs)
+            #bin_evol = bin_evol.reshape(-1, 2)
+            for future in self.work_manager.as_completed(futures):
+                #pi.progress += iblock / step_iter
+                bin_pops.append(future.get_result(discard=True))
+            hist = self.output_file.replace_dataset('histograms', data=bin_pops, shuffle=True, compression=9)
+            hist.attrs['iter_start'] = start_iter
+            hist.attrs['iter_stop'] = stop_iter
+            import ast
+            binbounds = []
+            midpoints = []
+            for i in self.assignments_file['bin_labels']:
+                binbounds.append(ast.literal_eval(i)[0][0])
+            # This is probably crap, so...
+            binbounds.append(ast.literal_eval(self.assignments_file['bin_labels'][-1])[0][1])
+            #binbounds.append(binbounds[-1]+1)
+            for i in range(1, len(binbounds)):
+                midpoints.append(((binbounds[i] - binbounds[i-1])/2)+binbounds[i-1])
+            self.output_file.replace_dataset('binbounds_0', data=binbounds, shuffle=True, compression=9)
+            self.output_file.replace_dataset('midpoints_0', data=midpoints, shuffle=True, compression=9)
+            self.output_file.replace_dataset('n_iter', data=list(range(start_iter,stop_iter)), shuffle=True, compression=9)
+
     def go(self):
         pi = self.progress.indicator
         with pi:
@@ -620,8 +684,6 @@ Command-line options
 '''    
 
     def go(self):
-        # One minor issue; as this stands now, since it's inheriting from all the other classes, it needs
-        # a kinetics file to instantiate the other attributes.  We'll need to modify how the loading works, there.
         pi = self.progress.indicator
         with pi:
             self.w_postanalysis_matrix()
