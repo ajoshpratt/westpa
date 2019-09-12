@@ -297,7 +297,7 @@ class WIPI(WESTParallelTool):
                             #new_hash = self.hash_args(args=args, path=path, extra=[self.niters, pickle.dumps(assign.binning.mapper), assign.states])
                             # We need to encode it properly to ensure that some OS specific thing doesn't kill us.  Same goes for the args, ultimately.
                             # Mostly, we just need to ensure that we're consistent.
-                            new_hash = self.hash_args(args=args, path=path, extra=[int(self.niters), pickle.dumps(assign.binning.mapper).encode('base64'), str(assign.states).encode('base64')])
+                            new_hash = self.hash_args(args=args, path=path, extra=[int(self.niters), pickle.dumps(assign.binning.mapper), str(assign.states).encode('base64')])
                             # Let's check the hash.  If the hash is the same, we don't need to reload.
                             if self.debug_mode == True:
                                 print('{:<10}: old hash, new hash -- {}, {}'.format(name, arg_hash, new_hash))
