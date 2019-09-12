@@ -170,7 +170,7 @@ class WIPI(WESTParallelTool):
             #print('args: {}'.format(to_hash))
         # This SHOULD produce the same output, maybe?  That would be nice, anyway.
         # But we'll need to test it more.
-        return hashlib.md5(str(to_hash).encode('base64')).hexdigest()
+        return hashlib.md5(str(to_hash).encode()).hexdigest()
 
     def stamp_hash(self, h5file_name, new_hash):
         '''Loads a file, stamps it, and returns the opened file in read only'''
