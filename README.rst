@@ -112,7 +112,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 MIT License for more details.
 
 You should have received a copy of the MIT License
-along with this program (see the included file ``COPYING``).  If not,
+along with this program (see the included file ``LICENSE``).  If not,
 see <https://opensource.org/licenses/MIT>.
 
 Unless otherwise noted, source files included in this distribution and
