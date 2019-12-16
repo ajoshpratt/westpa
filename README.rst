@@ -29,7 +29,7 @@ License, Version 3. See the file ``COPYING`` for more information.
 Requirements
 ------------
 
-WESTPA is written in Python and requires version 2.7. WESTPA further requires
+WESTPA is written in Python and requires version 3.x. WESTPA further requires
 a large number of scientific software libraries for Python and other
 languages. The simplest way to meet these requirements is to download the
 Anaconda Python distribution from www.continuum.io (free for all users).
@@ -48,7 +48,7 @@ be using to run the code is not first on your $PATH, then set the environment
 variable WEST_PYTHON to the Python interpreter you want to use. For example::
 
     cd westpa
-    export WEST_PYTHON=/opt/anaconda/bin/python2.7
+    export WEST_PYTHON=/opt/anaconda/bin/python3
     ./setup.sh
 
 A ``westpa.sh`` script is created during installation, and will set the following
@@ -76,12 +76,11 @@ given the -h/--help option.
 Finally, while WESTPA is a powerful tool that enables expert simulators to access much longer 
 timescales than is practical with standard simulations, there can be a steep learning curve to 
 figuring out how to effectively run the simulations on your computing resource of choice. 
-For serious users who have completed the online tutorials and are ready for production simulations 
-of their system, we invite you to contact Lillian Chong (ltchong AT pitt DOT edu) about spending 
-a few days with her lab and/or setting up video conferencing sessions to help you get your 
-simulations off the ground.
+For serious users who have completed WESTPA tutorials and are ready for production simulations 
+of their system, we invite you to contact Lillian Chong (ltchong AT pitt DOT edu) about visiting her lab 
+and/or setting up video conferencing calls to help get your simulations off the ground.
 
-.. _here: https://westpa.github.io/westpa/sphinx_index.html#tutorials
+.. _here: https://github.com/westpa/westpa/wiki/WESTPA-Tutorials
 
 
 ------------
