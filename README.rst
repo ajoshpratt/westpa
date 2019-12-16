@@ -29,7 +29,7 @@ License, Version 3. See the file ``COPYING`` for more information.
 Requirements
 ------------
 
-WESTPA is written in Python and requires version 3.x. WESTPA further requires
+WESTPA is written in Python and requires version 2.7. WESTPA further requires
 a large number of scientific software libraries for Python and other
 languages. The simplest way to meet these requirements is to download the
 Anaconda Python distribution from www.continuum.io (free for all users).
@@ -48,7 +48,7 @@ be using to run the code is not first on your $PATH, then set the environment
 variable WEST_PYTHON to the Python interpreter you want to use. For example::
 
     cd westpa
-    export WEST_PYTHON=/opt/anaconda/bin/python3
+    export WEST_PYTHON=/opt/anaconda/bin/python2.7
     ./setup.sh
 
 A ``westpa.sh`` script is created during installation, and will set the following
