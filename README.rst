@@ -92,49 +92,4 @@ if a question one has was previously addressed). This is the preferred means
 for obtaining help and support. See http://groups.google.com/group/westpa-users
 to sign up or search archived messages.
 
--------------------------------------------------------
-Copyright, license, and warranty information
--------------------------------------------------------
 
-For WESTPA
-###########
-
-The WESTPA package is copyright (c) 2013, Matthew C. Zwier and
-Lillian T. Chong. (Individual contributions noted in each source file.)
-
-WESTPA is free software: you can redistribute it and/or modify
-it under the terms of the MIT License as published by
-the Open Source Initiative.
-
-WESTPA is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-MIT License for more details.
-
-You should have received a copy of the MIT License
-along with this program (see the included file ``LICENSE``).  If not,
-see <https://opensource.org/licenses/MIT>.
-
-Unless otherwise noted, source files included in this distribution and
-lacking a more specific attribution are subject to the above copyright,
-terms, and conditions.
-
-
-For included software
-######################
-
-Distributions of WESTPA include a number of components without modification,
-each of which is subject to its own individual terms and conditions. Please
-see each package's documentation for the most up-to-date possible information
-on authorship and licensing. Such packages include:
-
-  h5py
-    See lib/h5py/docs/source/licenses.rst
-    
-  blessings
-    See lib/blessings/LICENSE
-    
-In addition, the ``wwmgr`` work manager is derived from the
-``concurrent.futures`` module (as included in Python 3.2) by Brian Quinlan and
-copyright 2011 the Python Software Foundation. See 
-http://docs.python.org/3/license.html for more information.
