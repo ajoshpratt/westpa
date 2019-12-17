@@ -24,41 +24,26 @@ WESTPA is free software, licensed under the terms of the MIT License. See the fi
 .. _survey: https://docs.google.com/forms/d/e/1FAIpQLSfWaB2aryInU06cXrCyAFmhD_gPibgOfFk-dspLEsXuS9-RGQ/viewform
 .. _page: https://westpa.github.io/westpa/overview.html
 
-------------
-Requirements
-------------
+--------------------------------
+Installing WESTPA
+--------------------------------
 
-WESTPA is written in Python and requires version 2.7. WESTPA further requires
-a large number of scientific software libraries for Python and other
-languages. The simplest way to meet these requirements is to download the
-Anaconda Python distribution from www.continuum.io (free for all users).
+First, install the `Anaconda Python distribution`_. Then, make sure you are able to activate conda environments (this is usually taken care of by the Anaconda installer).
 
-WESTPA currently runs on Unix-like operating systems, including Linux and
-Mac OS X. It is developed and tested on x86_64 machines running Linux.
+WESTPA can then be installed through conda in a dedicated environment with the following.
 
+``conda create -n westpa -c conda-forge westpa``
+  
+WESTPA will be ready to use after activation with the following command.
 
-------------
-Installation
-------------
+``. $(dirname $(dirname `which python2.7`))/$conda_env/westpa-2017.10/westpa.sh``
+  
+Feel free to install any other conda packages alongside WESTPA in your environment. AmberTools, GROMACS and OpenMM all
+provide conda installations of their MD packages. An example command to create an environment containing WESTPA and AmberTools is given below.
 
-After obtaining a copy of the code (see https://westpa.github.io/westpa for details), run
-``setup.sh`` in the ``westpa`` directory. If the version of Python you will
-be using to run the code is not first on your $PATH, then set the environment
-variable WEST_PYTHON to the Python interpreter you want to use. For example::
-
-    cd westpa
-    export WEST_PYTHON=/opt/anaconda/bin/python2.7
-    ./setup.sh
-
-A ``westpa.sh`` script is created during installation, and will set the following
-environment variables::
-
-    WEST_ROOT
-    WEST_BIN
-    WEST_PYTHON
-
-For installation on a cluster with modules, system administrators must set these
-variables to the appropriate values within the module file.
+``conda create -n westpa -c conda-forge -c ambermd westpa ambertools``
+    
+.. _`Anaconda Python distribution`: https://www.anaconda.com/distribution/ 
 
 ---------------
 Getting started
