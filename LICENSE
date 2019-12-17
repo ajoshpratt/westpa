@@ -31,7 +31,7 @@ on authorship and licensing. Such packages include:
   blessings
     See lib/blessings/LICENSE
     
-In addition, the ``wwmgr`` work manager is derived from the
-``concurrent.futures`` module (as included in Python 3.2) by Brian Quinlan and
+In addition, the wwmgr work manager is derived from the
+concurrent.futures module (as included in Python 3.2) by Brian Quinlan and
 copyright 2011 the Python Software Foundation. See 
 http://docs.python.org/3/license.html for more information.
